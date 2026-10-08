@@ -1,0 +1,19 @@
+{
+  "appId": "work.ltv.nagi",
+  "appName": "凪の池",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#08151c",
+    "scrollEnabled": false,
+    "preferredContentMode": "mobile"
+  },
+  "plugins": {
+    "StatusBar": {
+      "style": "DARK"
+    },
+    "LocalNotifications": {
+      "iconColor": "#08151c"
+    }
+  }
+}

@@ -1,0 +1,26 @@
+# iOSビルド確認（署名なし）。手元にXcodeが無いため、GitHubのmacOSランナーで
+# pod install → xcodebuild が通ることを検証する。App Store申請には使わない。
+name: iOS build check
+on:
+  push:
+    paths: ["index.html", "ios-app/**", ".github/workflows/ios-build.yml"]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: macos-latest
+    defaults: { run: { working-directory: ios-app } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci
+      - run: npm run sync-web
+      - run: npx cap sync ios
+      - name: Build (simulator, no signing)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -workspace ios/App/App.xcworkspace -scheme App \
+            -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug CODE_SIGNING_ALLOWED=NO \
+            | tail -30

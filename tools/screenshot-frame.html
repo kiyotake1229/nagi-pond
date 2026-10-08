@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>凪の池 スクリーンショット台紙</title>
+<!-- App Store 用スクリーンショットの台紙。tools/make-screenshots.mjs が開いて撮影する（手で開いても見られる: ?iw=402&ih=786&scene=pond） -->
+<style>
+  :root { --ink: #08151c; --glow: #173a47; --paper: #ece6d3; --paper2: rgba(236,230,211,.68); }
+  html, body { margin: 0; height: 100%; }
+  body {
+    overflow: hidden; display: flex; flex-direction: column; align-items: center; color: var(--paper);
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;
+    background: radial-gradient(120% 55% at 50% 0%, var(--glow) 0%, transparent 64%), var(--ink);
+  }
+  .cap { text-align: center; padding: 0 7vw; box-sizing: border-box; width: 100%; }
+  .cap h1 { margin: 0; font-weight: 600; line-height: 1.4; letter-spacing: .12em; word-break: keep-all; overflow-wrap: anywhere; }
+  .cap p { margin: .7em 0 0; color: var(--paper2); letter-spacing: .1em; word-break: keep-all; overflow-wrap: anywhere; }
+  .device { position: relative; overflow: hidden; background: var(--ink); box-shadow: 0 40px 90px -30px rgba(0,0,0,.85), 0 0 0 1px rgba(236,230,211,.16); }
+  .device iframe { border: 0; display: block; transform-origin: 0 0; }
+</style>
+</head>
+<body>
+<div class="cap"><h1 id="h"></h1><p id="p"></p></div>
+<div class="device" id="dev"><iframe id="app" title="凪の池"></iframe></div>
+<script>
+const q = new URLSearchParams(location.search);
+const iw = +q.get('iw') || 402, ih = +q.get('ih') || 786; // アプリの表示領域（その端末での CSS ピクセル）
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// 撮影用の池の状態（鯉・図鑑・記録）。音は消しておく
+function seedState(set) {
+  const now = Date.now(), day = 864e5;
+  const days = {};
+  for (let i = 0; i < 7; i++) { const d = new Date(now - i * day); days[`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`] = [540, 1260, 300, 960, 720, 1500, 840][i]; }
+  return {
+    v: 1, created: now - 20 * day, nextId: 8, blooms: 71, fulls: 13, breaths: 9, breathSec: 1860, hint: 3, days,
+    koi: [
+      { id: 1, kind: 'kohaku', seed: 11, xp: 60, born: now - 19 * day, name: 'あかね' },
+      { id: 2, kind: 'ogon', seed: 22, xp: 50, born: now - 15 * day },
+      { id: 3, kind: 'showa', seed: 33, xp: 27, born: now - 12 * day },
+      { id: 4, kind: 'tancho', seed: 44, xp: 9, born: now - 8 * day, name: 'まる' },
+      { id: 5, kind: 'asagi', seed: 55, xp: 26, born: now - 6 * day },
+      { id: 6, kind: 'sanke', seed: 66, xp: 8, born: now - 3 * day },
+      { id: 7, kind: 'chagoi', seed: 77, xp: 58, born: now - 19 * day, name: 'こはる' },
+    ],
+    seen: { kohaku: true, ogon: true, showa: true, tancho: true, asagi: true, sanke: true, chagoi: true, platinum: true, shiro: true },
+    set: Object.assign({ bgm: false, sfx: false, vib: false, vol: 0, mute: true, scene: 'night', season: 'autumn', shishi: false, lantern: true, bp: 'totonou', blen: 3, notify: false, notifyHour: 21 }, set),
+  };
+}
+// つぼみに近いところを何度か触って咲かせる
+async function bloom(N, count, partial) {
+  for (let i = 0; i < count && i < N.pads.length; i++) {
+    const p = N.pads[i];
+    for (let k = 0; k < 8 && !p.bloomed; k++) { N.tapAt(p.x + 3, p.y + 3); await sleep(120); }
+  }
+  if (partial) { const p = N.pads[count]; if (p) { N.tapAt(p.x + 3, p.y + 3); N.tapAt(p.x + 3, p.y + 3); } }
+}
+
+const SCENES = {
+  pond: { h: '触れると、波紋と音がひろがる', p: '夜の池で、ひと息つくリラックスゲーム',
+    run: async N => { await bloom(N, 2, true); await sleep(2600); N.tapAt(iw * .5, ih * .62); await sleep(900); } },
+  bloom: { h: '五輪咲けば、満開', p: '新しい鯉が池にやってくる',
+    // 満開の文字がはっきり見え、新しい鯉の知らせが出たところで撮る
+    run: async N => { await bloom(N, 5); for (let i = 0; i < 60 && !N.round.celebrated; i++) await sleep(100); await sleep(3100); } },
+  zukan: { h: '12種の鯉と出会う図鑑', p: '名前を付けて、大鯉まで育てる',
+    run: async N => { await bloom(N, 3); await sleep(1500); N.openSheet('zukan'); await sleep(1300); } },
+  breath: { h: '輪に合わせて、ゆっくり呼吸', p: 'ととのう・ねむる・しずめる',
+    run: async N => { await bloom(N, 2); await sleep(1500); N.breathStart(); await sleep(3600); } },
+  season: { h: '時刻と季節で、池が変わる', p: '朝霧・夕暮れ　桜・蛍・紅葉・雪', set: { scene: 'dusk', season: 'winter' },
+    run: async N => { await bloom(N, 3, true); await sleep(3400); } },
+};
+
+function layout() {
+  const W = innerWidth, H = innerHeight, base = Math.min(W * 0.068, H * 0.033);
+  const cap = document.querySelector('.cap');
+  cap.style.paddingTop = (H * 0.055) + 'px';
+  document.getElementById('h').style.fontSize = base + 'px';
+  document.getElementById('p').style.fontSize = (base * 0.5) + 'px';
+  const top = cap.getBoundingClientRect().bottom + H * 0.035;
+  const s = Math.min((H - top - H * 0.045) / ih, (W * 0.86) / iw);
+  const dev = document.getElementById('dev'), f = document.getElementById('app');
+  dev.style.marginTop = (H * 0.035) + 'px';
+  dev.style.width = iw * s + 'px'; dev.style.height = ih * s + 'px';
+  dev.style.borderRadius = Math.round(Math.min(iw, ih) * 0.09 * s) + 'px';
+  f.style.width = iw + 'px'; f.style.height = ih + 'px'; f.style.transform = `scale(${s})`;
+}
+
+// 撮影する場面を用意する。保存領域を整えてからアプリを読み込み、操作して、少し待つ
+window.setupScene = async name => {
+  const sc = SCENES[name];
+  document.getElementById('h').textContent = sc.h;
+  document.getElementById('p').textContent = sc.p;
+  layout();
+  localStorage.clear();
+  localStorage.setItem('nagi.v1', JSON.stringify(seedState(sc.set || {})));
+  const f = document.getElementById('app');
+  await new Promise(r => { f.onload = r; f.src = '../index.html?shot=' + Date.now(); });
+  const w = f.contentWindow;
+  // 撮影中は画面の部品を薄くしない・タイトルの切り替えを待たない
+  const st = w.document.createElement('style');
+  st.textContent = 'body.calm .hud { opacity: 1 !important; } body.calm:not(.breathing) .dock { opacity: 1 !important; } .title { transition: none !important; }';
+  w.document.head.appendChild(st);
+  const N = w.__nagi;
+  N.start();
+  await sleep(1200);
+  await sc.run(N);
+  return { koi: N.koi.length, bloomed: N.pads.filter(p => p.bloomed).length, fulls: N.S.fulls };
+};
+layout();
+if (q.get('scene')) setupScene(q.get('scene'));
+</script>
+</body>
+</html>

@@ -1,0 +1,1813 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>凪の池</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="description" content="水面に触れて、波紋と音を楽しむ。鯉が育ち、蓮が咲く、静かな池のゲーム。">
+<meta name="theme-color" content="#08151c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="凪の池">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+:root{
+  /* Layout: full-bleed pond canvas. Vertical mincho type hangs like a scroll; one glass dock floats above the water. */
+  --ink:#08151c;
+  --paper:#ece6d3;
+  --paper-2:rgba(236,230,211,.68);
+  --paper-3:rgba(236,230,211,.4);
+  --hair:rgba(236,230,211,.13);
+  --glass:rgba(10,24,31,.46);
+  --sheet:rgba(9,19,25,.93);
+  --hi:#e8613c;
+  --lotus:#f1b7c4;
+  --moss:#8fb79a;
+  --gold:#e3c07c;
+  --display:"Hiragino Mincho ProN","Hiragino Mincho Pro","Yu Mincho","YuMincho","Noto Serif JP","Noto Serif CJK JP","Source Han Serif JP",serif;
+  --body:"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic UI","Yu Gothic","Noto Sans JP","Noto Sans CJK JP",system-ui,sans-serif;
+  --ease:cubic-bezier(.2,.8,.2,1);
+  --st:env(safe-area-inset-top,0px);
+  --sb:env(safe-area-inset-bottom,0px);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none;background:var(--ink);color:var(--paper);font-family:var(--body);-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-text-size-adjust:100%}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;touch-action:manipulation}
+button:focus-visible,input:focus-visible{outline:2px solid var(--paper-2);outline-offset:3px;border-radius:12px}
+svg{display:block}
+#pond{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+
+/* ---------- HUD ---------- */
+.hud{position:fixed;left:0;right:0;top:0;padding:calc(var(--st) + 14px) 16px 0;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none;z-index:5;transition:opacity 1.6s var(--ease),transform 1s var(--ease)}
+.hud>*{pointer-events:auto}
+.sekki{writing-mode:vertical-rl;font-family:var(--display);font-size:15px;letter-spacing:.3em;color:var(--paper-2);line-height:1;display:flex;gap:8px;padding-top:4px;min-width:40px}
+.sekki small{font-size:10px;letter-spacing:.18em;color:var(--paper-3)}
+.buds{display:flex;gap:7px;padding:9px 13px;border-radius:999px;background:var(--glass);border:1px solid var(--hair);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.buds span{display:block;width:18px;height:18px;color:var(--paper-3);transition:color .8s,transform .8s var(--ease)}
+.buds span svg{width:100%;height:100%}
+.buds span.on{color:var(--lotus);transform:scale(1.15);animation:budpop .9s var(--ease)}
+@keyframes budpop{0%{transform:scale(.6)}55%{transform:scale(1.45)}100%{transform:scale(1.15)}}
+.hud-right{display:flex;flex-direction:column;align-items:flex-end;gap:8px;min-width:40px}
+.icon-btn{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--glass);border:1px solid var(--hair);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);transition:transform .3s var(--ease),background .3s}
+.icon-btn svg{width:19px;height:19px}
+.icon-btn:active{transform:scale(.88)}
+@media (hover:hover){.icon-btn:hover{background:rgba(236,230,211,.12)}}
+.sleep-chip{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--paper-2);padding:5px 10px;border-radius:999px;background:var(--glass);border:1px solid var(--hair);font-variant-numeric:tabular-nums}
+.sleep-chip svg{width:12px;height:12px}
+
+/* ---------- dock ---------- */
+.dock{position:fixed;left:50%;bottom:calc(var(--sb) + 16px);transform:translateX(-50%);display:flex;gap:4px;padding:6px;border-radius:26px;background:var(--glass);border:1px solid var(--hair);-webkit-backdrop-filter:blur(16px) saturate(1.2);backdrop-filter:blur(16px) saturate(1.2);z-index:5;transition:opacity 1.6s var(--ease),transform 1s var(--ease)}
+.dock button{width:68px;padding:9px 0 7px;border-radius:20px;display:flex;flex-direction:column;align-items:center;gap:5px;font-size:11px;letter-spacing:.12em;color:var(--paper-2);transition:background .3s,color .3s,transform .3s var(--ease)}
+.dock button svg{width:22px;height:22px;transition:transform .5s var(--ease)}
+.dock button:active{transform:scale(.92)}
+@media (hover:hover){.dock button:hover{background:rgba(236,230,211,.09);color:var(--paper)}.dock button:hover svg{transform:translateY(-2px)}}
+body.calm .hud,body.calm .dock{opacity:.3}
+body.calm .dock:hover,body.calm .hud:hover{opacity:1}
+body.intro .hud{opacity:0;transform:translateY(-14px);pointer-events:none}
+body.intro .dock{opacity:0;transform:translate(-50%,18px);pointer-events:none}
+body.breathing .dock,body.breathing .hud .buds{opacity:0;pointer-events:none}
+
+/* ---------- title ---------- */
+.title{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:36px;padding:calc(var(--st) + 24px) 16px calc(var(--sb) + 28px);background:radial-gradient(120% 70% at 50% 45%,rgba(4,10,14,0) 0%,rgba(4,10,14,.35) 60%,rgba(4,10,14,.7) 100%);transition:opacity 1.4s var(--ease),filter 1.4s var(--ease),visibility 0s 1.4s;cursor:pointer}
+.title.gone{opacity:0;filter:blur(8px);visibility:hidden;pointer-events:none}
+.title-art{display:flex;flex-direction:row-reverse;align-items:flex-start;gap:22px}
+.title-name{margin:0;writing-mode:vertical-rl;font-family:var(--display);font-weight:600;font-size:clamp(46px,13vw,72px);letter-spacing:.32em;line-height:1;color:var(--paper);text-shadow:0 0 30px rgba(236,230,211,.25)}
+.title-name span{display:inline-block;opacity:0;animation:rise 1.8s var(--ease) forwards}
+.title-name span:nth-child(2){animation-delay:.35s}
+.title-name span:nth-child(3){animation-delay:.7s}
+@keyframes rise{from{opacity:0;transform:translateY(-14px);filter:blur(6px)}to{opacity:1;transform:none;filter:none}}
+.title-sekki{margin:0;writing-mode:vertical-rl;font-family:var(--display);display:flex;gap:12px;padding-top:14px;opacity:0;animation:fade 2s 1.1s var(--ease) forwards}
+.title-sekki b{font-weight:500;font-size:19px;letter-spacing:.3em;color:var(--paper)}
+.title-sekki span{font-size:12px;letter-spacing:.25em;color:var(--paper-2)}
+.title-sekki em{font-style:normal;font-size:10px;letter-spacing:.2em;color:var(--paper-3)}
+@keyframes fade{to{opacity:1}}
+.start{position:relative;padding:15px 34px;border-radius:999px;font-family:var(--display);font-size:16px;letter-spacing:.32em;color:var(--paper);border:1px solid rgba(236,230,211,.35);background:rgba(236,230,211,.06);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);opacity:0;animation:fade 1.6s 1.6s var(--ease) forwards;transition:background .4s,transform .3s var(--ease)}
+.start::after{content:"";position:absolute;inset:-1px;border-radius:inherit;border:1px solid rgba(236,230,211,.45);animation:halo 3.2s 2.4s ease-out infinite;opacity:0}
+@keyframes halo{0%{opacity:.7;transform:scale(1)}100%{opacity:0;transform:scale(1.35,1.6)}}
+.start:active{transform:scale(.96)}
+@media (hover:hover){.start:hover{background:rgba(236,230,211,.14)}}
+.title-note{margin:0;font-size:11px;letter-spacing:.14em;color:var(--paper-3);text-align:center;line-height:1.8;opacity:0;animation:fade 1.6s 2.1s var(--ease) forwards}
+
+/* ---------- hint / toast / big ---------- */
+.hint{position:fixed;left:50%;bottom:calc(var(--sb) + 112px);transform:translate(-50%,8px);width:max-content;max-width:calc(100% - 32px);text-align:center;font-family:var(--display);font-size:15px;letter-spacing:.16em;line-height:1.7;color:var(--paper);text-shadow:0 1px 14px rgba(0,0,0,.6);opacity:0;pointer-events:none;transition:opacity 1.2s var(--ease),transform 1.2s var(--ease);z-index:4}
+.hint.show{opacity:1;transform:translate(-50%,0)}
+.toasts{position:fixed;left:0;right:0;top:calc(var(--st) + 70px);display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;z-index:15;padding:0 16px}
+.toast{max-width:100%;display:flex;flex-direction:column;align-items:center;gap:2px;padding:11px 20px;border-radius:18px;background:var(--sheet);border:1px solid var(--hair);box-shadow:0 10px 40px rgba(0,0,0,.35);text-align:center;animation:tin .7s var(--ease)}
+.toast b{font-family:var(--display);font-weight:500;font-size:15px;letter-spacing:.1em}
+.toast span{font-size:12px;color:var(--paper-2);letter-spacing:.06em}
+.toast.out{animation:tout .7s var(--ease) forwards}
+@keyframes tin{from{opacity:0;transform:translateY(-10px) scale(.96)}}
+@keyframes tout{to{opacity:0;transform:translateY(-8px) scale(.97)}}
+.big{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:6}
+.big span{writing-mode:vertical-rl;font-family:var(--display);font-size:clamp(54px,16vw,88px);letter-spacing:.5em;color:var(--paper);text-shadow:0 0 40px rgba(255,236,210,.55);opacity:0}
+.big.show span{animation:bigin 4.6s var(--ease) forwards}
+@keyframes bigin{0%{opacity:0;filter:blur(10px);transform:scale(.94)}22%{opacity:1;filter:blur(0);transform:none}75%{opacity:1;filter:blur(0);transform:none}100%{opacity:0;filter:blur(6px);transform:scale(1.03)}}
+
+/* ---------- sheet ---------- */
+.scrim{position:fixed;inset:0;background:rgba(2,6,9,.45);opacity:0;pointer-events:none;transition:opacity .5s var(--ease);z-index:30}
+.scrim.open{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;margin:0 auto;max-width:560px;max-height:84vh;max-height:min(84vh,84dvh);display:flex;flex-direction:column;background:var(--sheet);border:1px solid var(--hair);border-bottom:0;border-radius:26px 26px 0 0;-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);transform:translateY(105%);transition:transform .55s var(--ease);z-index:31;-webkit-user-select:text;user-select:text}
+.sheet.open{transform:none}
+.sheet-grip{width:38px;height:4px;border-radius:4px;background:var(--hair);margin:10px auto 0}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;padding:10px 16px 6px 22px}
+.sheet-head h2{margin:0;font-family:var(--display);font-weight:500;font-size:21px;letter-spacing:.24em}
+.sheet-body{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:6px 22px calc(var(--sb) + 28px);overscroll-behavior:contain}
+.sec{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:26px 0 12px;font-family:var(--display);font-weight:500;font-size:14px;letter-spacing:.24em;color:var(--paper-2)}
+.sec small{font-family:var(--body);font-size:11px;letter-spacing:.08em;color:var(--paper-3)}
+.lead{margin:6px 0 0;font-size:13px;line-height:1.9;color:var(--paper-2)}
+.note{margin:8px 0 0;font-size:11.5px;line-height:1.7;color:var(--paper-3)}
+
+/* records */
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.stat{padding:14px 16px;border-radius:16px;background:rgba(236,230,211,.045);border:1px solid var(--hair);display:flex;flex-direction:column;gap:6px}
+.stat .k{font-size:11px;letter-spacing:.16em;color:var(--paper-3)}
+.stat .v{font-family:var(--display);font-size:30px;line-height:1;font-variant-numeric:tabular-nums}
+.stat .v small{font-family:var(--body);font-size:12px;color:var(--paper-2);margin:0 4px 0 2px}
+.week{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;align-items:end;height:128px;padding:0 2px}
+.wk{display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end;min-width:0}
+.wk i{display:block;width:100%;max-width:26px;border-radius:7px 7px 3px 3px;background:rgba(143,183,154,.38);min-height:3px;transform-origin:bottom;animation:grow .9s var(--ease) both}
+.wk.today i{background:var(--moss)}
+.wk b{font-weight:400;font-size:10px;color:var(--paper-3);font-variant-numeric:tabular-nums;min-height:12px}
+.wk span{font-family:var(--display);font-size:12px;color:var(--paper-2)}
+.wk.today span{color:var(--paper)}
+@keyframes grow{from{transform:scaleY(0)}}
+.mini{margin-top:14px;font-size:12px;color:var(--paper-2);line-height:1.9;letter-spacing:.04em}
+.unlocks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.unlocks li{display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:14px;border:1px solid var(--hair)}
+.unlocks li svg{width:18px;height:18px;flex:none;color:var(--paper-3)}
+.unlocks li.got svg{color:var(--lotus)}
+.unlocks .u{display:flex;flex-direction:column;gap:2px;min-width:0}
+.unlocks .u b{font-family:var(--display);font-weight:500;font-size:14px;letter-spacing:.14em}
+.unlocks .u span{font-size:11.5px;color:var(--paper-3)}
+.unlocks li.got .u span{color:var(--paper-2)}
+.unlocks li:not(.got) .u b{color:var(--paper-3)}
+
+/* zukan */
+.zk-top{display:flex;align-items:baseline;gap:10px;margin-top:8px}
+.zk-top b{font-family:var(--display);font-weight:500;font-size:34px;font-variant-numeric:tabular-nums}
+.zk-top span{font-size:12px;color:var(--paper-2);letter-spacing:.1em}
+.pond-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.pk{display:flex;align-items:center;gap:12px;padding:8px 12px 8px 6px;border-radius:16px;background:rgba(236,230,211,.04);border:1px solid var(--hair)}
+.pk canvas{width:96px;height:48px;flex:none}
+.pk-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.pk-name{display:flex;align-items:baseline;gap:8px;font-family:var(--display);font-size:15px;letter-spacing:.1em}
+.pk-name small{font-family:var(--body);font-size:10.5px;letter-spacing:.12em;color:var(--paper-2);padding:2px 8px;border-radius:999px;border:1px solid var(--hair)}
+.bar{height:4px;border-radius:4px;background:rgba(236,230,211,.08);overflow:hidden}
+.bar i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#d9744f,#f0b48c);transform-origin:left;animation:barin 1s var(--ease) both}
+@keyframes barin{from{transform:scaleX(0)}}
+.pk-sub{font-size:11px;color:var(--paper-3);letter-spacing:.04em}
+.zk-grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.zk{padding:10px 12px 12px;border-radius:16px;border:1px solid var(--hair);background:rgba(236,230,211,.035);display:flex;flex-direction:column;gap:4px;min-width:0;animation:tin .6s var(--ease) both}
+.zk canvas{width:100%;height:auto;aspect-ratio:2/1;max-width:100%}
+.zk-name{display:flex;align-items:baseline;justify-content:space-between;gap:6px;font-family:var(--display);font-size:15px;letter-spacing:.08em}
+.zk-name small{font-family:var(--body);font-size:10px;letter-spacing:.06em;color:var(--paper-3);white-space:nowrap}
+.zk p{margin:2px 0 0;font-size:11px;line-height:1.65;color:var(--paper-2)}
+.zk.unseen .zk-name{color:var(--paper-3)}
+.rare{display:inline-flex;gap:3px}
+.rare i{width:5px;height:5px;border-radius:50%;background:var(--paper-3)}
+.rare i.on{background:var(--gold)}
+
+/* settings */
+.row{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:48px;border-bottom:1px solid var(--hair)}
+.row:last-child{border-bottom:0}
+.row label,.row>span{font-size:14px;letter-spacing:.06em;display:flex;flex-direction:column;gap:2px}
+.row small{font-size:11px;color:var(--paper-3);letter-spacing:.02em}
+.sw{position:relative;width:50px;height:30px;border-radius:999px;background:rgba(236,230,211,.13);flex:none;transition:background .35s var(--ease)}
+.sw i{position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:var(--paper);box-shadow:0 2px 6px rgba(0,0,0,.3);transition:transform .35s var(--ease)}
+.sw[aria-checked="true"]{background:#5f8f74}
+.sw[aria-checked="true"] i{transform:translateX(20px)}
+.lock{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--paper-3);white-space:nowrap}
+.lock svg{width:13px;height:13px}
+input[type=range]{-webkit-appearance:none;appearance:none;width:min(52%,220px);height:30px;background:transparent}
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:4px;background:rgba(236,230,211,.2)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:var(--paper);margin-top:-9px;box-shadow:0 2px 6px rgba(0,0,0,.35)}
+input[type=range]::-moz-range-track{height:4px;border-radius:4px;background:rgba(236,230,211,.2)}
+input[type=range]::-moz-range-thumb{width:22px;height:22px;border:0;border-radius:50%;background:var(--paper)}
+.seg{display:flex;padding:4px;border-radius:14px;background:rgba(236,230,211,.06);border:1px solid var(--hair);gap:2px}
+.seg button{flex:1;min-width:0;padding:9px 0;border-radius:10px;font-size:13px;letter-spacing:.08em;color:var(--paper-2);transition:background .3s,color .3s}
+.seg button[aria-pressed="true"]{background:rgba(236,230,211,.9);color:#0c1a21}
+.danger{width:100%;padding:13px;border-radius:14px;border:1px solid rgba(232,97,60,.45);color:#f2a088;font-size:14px;letter-spacing:.1em;transition:background .3s}
+.danger.armed{background:rgba(232,97,60,.85);color:#fff}
+.about{margin:30px 0 0;font-size:11px;line-height:1.9;color:var(--paper-3);text-align:center}
+.about a{display:inline-block;margin-top:6px;color:var(--paper-2);text-underline-offset:3px}
+
+/* breath sheet */
+.bp{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+.bp button{display:flex;align-items:center;gap:14px;text-align:left;padding:14px 16px;border-radius:16px;border:1px solid var(--hair);background:rgba(236,230,211,.035);transition:border-color .3s,background .3s}
+.bp button[aria-checked="true"]{border-color:rgba(236,230,211,.6);background:rgba(236,230,211,.09)}
+.bp b{font-family:var(--display);font-weight:500;font-size:17px;letter-spacing:.2em;min-width:5.4em}
+.bp span{font-size:12px;color:var(--paper-2);line-height:1.6}
+.primary{width:100%;margin-top:22px;padding:15px;border-radius:16px;background:var(--paper);color:#0c1a21;font-family:var(--display);font-size:16px;letter-spacing:.3em;transition:transform .3s var(--ease),opacity .3s}
+.primary:active{transform:scale(.97)}
+
+/* breath overlay */
+.breath{position:fixed;inset:0;pointer-events:none;z-index:7;opacity:0;visibility:hidden;transition:opacity 1.2s var(--ease),visibility 0s 1.2s}
+.breath.show{opacity:1;visibility:visible;transition:opacity 1.2s var(--ease)}
+.breath-mid{position:absolute;left:0;right:0;top:45%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;gap:6px;text-shadow:0 1px 18px rgba(0,0,0,.5)}
+.breath-mid b{font-family:var(--display);font-weight:500;font-size:26px;letter-spacing:.4em;padding-left:.4em;transition:opacity .5s}
+.breath-mid span{font-family:var(--display);font-size:15px;color:var(--paper-2);font-variant-numeric:tabular-nums;min-height:1.3em}
+.breath-foot{position:absolute;left:0;right:0;bottom:calc(var(--sb) + 26px);display:flex;align-items:center;justify-content:center;gap:16px}
+.breath-foot span{font-size:13px;color:var(--paper-2);font-variant-numeric:tabular-nums;letter-spacing:.08em}
+.ghost{pointer-events:auto;padding:10px 22px;border-radius:999px;border:1px solid var(--hair);background:var(--glass);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);font-size:13px;letter-spacing:.2em;color:var(--paper);transition:transform .3s var(--ease)}
+.ghost:active{transform:scale(.95)}
+
+/* sleep cover */
+/* photo */
+.shutter{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:45}
+.shutter.go{animation:shut .6s ease-out}
+@keyframes shut{0%{opacity:.55}100%{opacity:0}}
+.photo{position:fixed;inset:0;z-index:42;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:calc(var(--st) + 20px) 16px calc(var(--sb) + 20px);background:rgba(2,6,9,.82);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);opacity:0;visibility:hidden;transition:opacity .5s var(--ease),visibility 0s .5s}
+.photo.show{opacity:1;visibility:visible;transition:opacity .5s var(--ease)}
+.photo img{display:block;max-width:100%;max-height:calc(100% - 120px);width:auto;height:auto;border-radius:14px;box-shadow:0 30px 80px rgba(0,0,0,.6);transform:scale(.94);transition:transform .6s var(--ease);-webkit-touch-callout:default;-webkit-user-select:auto;user-select:auto}
+.photo.show img{transform:none}
+.photo-btns{display:flex;gap:10px;width:min(100%,360px)}
+.photo-btns button{flex:1;padding:14px;border-radius:16px;font-family:var(--display);font-size:15px;letter-spacing:.2em;transition:transform .3s var(--ease)}
+.photo-btns button:active{transform:scale(.96)}
+.photo-btns .primary{margin:0}
+.photo-btns .ghost{pointer-events:auto}
+.photo small{font-size:11px;color:var(--paper-3);letter-spacing:.1em}
+/* koi name */
+.pk-name em{font-style:normal;font-family:var(--body);font-size:11px;color:var(--paper-3);letter-spacing:.06em}
+.pk-edit{margin-left:auto;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;color:var(--paper-2);border:1px solid var(--hair);transition:background .3s,transform .3s var(--ease);flex:none}
+.pk-edit svg{width:15px;height:15px}
+.pk-edit:active{transform:scale(.9)}
+@media (hover:hover){.pk-edit:hover{background:rgba(236,230,211,.1)}}
+.pk-form{display:flex;gap:6px;align-items:center}
+.pk-form input{flex:1;min-width:0;padding:8px 10px;border-radius:10px;border:1px solid rgba(236,230,211,.35);background:rgba(236,230,211,.06);color:var(--paper);font:inherit;font-size:15px;-webkit-user-select:text;user-select:text}
+.pk-form button{padding:8px 12px;border-radius:10px;background:var(--paper);color:#0c1a21;font-size:13px;letter-spacing:.1em;white-space:nowrap}
+input{-webkit-user-select:text;user-select:text}
+.sleep-cover{position:fixed;inset:0;z-index:40;background:rgba(1,4,6,.9);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;opacity:0;pointer-events:none;transition:opacity 6s ease}
+.sleep-cover.show{opacity:1;pointer-events:auto}
+.sleep-cover p{margin:0;writing-mode:vertical-rl;font-family:var(--display);font-size:22px;letter-spacing:.5em;color:rgba(236,230,211,.55)}
+.sleep-cover small{font-size:11px;color:rgba(236,230,211,.3);letter-spacing:.2em}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-delay:0s!important;transition-duration:.2s!important}
+  .title-name span,.title-sekki,.start,.title-note{opacity:1}
+}
+@media (min-width:700px){.dock button{width:78px}}
+</style>
+</head>
+<body class="intro">
+<canvas id="pond" aria-label="池の水面。触れると波紋が広がります"></canvas>
+
+<header class="hud" id="hud">
+  <div class="sekki" id="sekki"></div>
+  <div class="buds" id="buds" aria-label="蓮の開花"></div>
+  <div class="hud-right">
+    <button class="icon-btn" id="muteBtn" aria-label="音を消す"></button>
+    <button class="icon-btn" id="shotBtn" aria-label="池の写真を撮る"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M4 8.5h3l1.6-2.5h6.8L17 8.5h3v10H4z"/><circle cx="12" cy="13.2" r="3.4"/></svg></button>
+    <div class="sleep-chip" id="sleepChip" hidden></div>
+  </div>
+</header>
+
+<div class="hint" id="hint" aria-live="polite"></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<div class="big" id="big" aria-hidden="true"><span>満開</span></div>
+
+<div class="breath" id="breath" aria-live="polite">
+  <div class="breath-mid"><b id="bPhase">吸う</b><span id="bCount"></span></div>
+  <div class="breath-foot"><span id="bLeft"></span><button class="ghost" id="bEnd">おわる</button></div>
+</div>
+
+<nav class="dock" id="dock" aria-label="メニュー">
+  <button data-open="breath"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="2.6"/><circle cx="12" cy="12" r="6.2" opacity=".7"/><circle cx="12" cy="12" r="9.8" opacity=".38"/></svg><span>呼吸</span></button>
+  <button data-open="zukan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><path d="M3.5 12c2.6-3.6 7.2-4.6 11.2-2.6L19.5 6.5v11l-4.8-2.9C10.7 16.6 6.1 15.6 3.5 12z"/><circle cx="7.6" cy="11.2" r=".9" fill="currentColor" stroke="none"/><path d="M11 10.2c.6 1.1.6 2.5 0 3.6" opacity=".6"/></svg><span>図鑑</span></button>
+  <button data-open="record"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 19.5v-7M10 19.5V6M15 19.5v-5M20 19.5V9.5"/></svg><span>記録</span></button>
+  <button data-open="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 7.5h9.5M18.5 7.5H20M4 16.5h3.5M12.5 16.5H20"/><circle cx="16" cy="7.5" r="2.4"/><circle cx="10" cy="16.5" r="2.4"/></svg><span>設定</span></button>
+</nav>
+
+<div class="title" id="title">
+  <div class="title-art">
+    <h1 class="title-name"><span>凪</span><span>の</span><span>池</span></h1>
+    <p class="title-sekki" id="tSekki"></p>
+  </div>
+  <button class="start" id="startBtn">水面に触れる</button>
+  <p class="title-note">音が出ます。イヤホンがおすすめです<br>マナーモードでは音が鳴らないことがあります</p>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" aria-hidden="true">
+  <div class="sheet-grip"></div>
+  <header class="sheet-head"><h2 id="sheetTitle"></h2><button class="icon-btn" id="sheetClose" aria-label="閉じる"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button></header>
+  <div class="sheet-body" id="sheetBody"></div>
+</section>
+
+<div class="shutter" id="shutter"></div>
+<div class="photo" id="photo" role="dialog" aria-modal="true" aria-label="池の写真">
+  <img id="photoImg" alt="池の写真">
+  <div class="photo-btns"><button class="ghost" id="photoClose">閉じる</button><button class="primary" id="photoShare">共有する</button></div>
+  <small id="photoNote">画像を長押しすると保存できます</small>
+</div>
+<div class="sleep-cover" id="sleepCover"><p>おやすみなさい</p><small>触れると戻ります</small></div>
+
+<script>
+'use strict';
+(() => {
+// ================= 小さな道具 =================
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const rand = (a = 1, b) => b === undefined ? Math.random() * a : a + Math.random() * (b - a);
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const easeOut = t => 1 - Math.pow(1 - t, 3);
+const easeInOut = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+const angDiff = (a, b) => { let d = (a - b) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; };
+const mulberry = seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+const hex = h => { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+const rgba = (c, a = 1) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+const dayKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// ================= 暦（二十四節気） =================
+// [月, 日, 名前, 読み, 意味, 季節]  日付は年により1日ほど前後する
+const SEKKI = [
+  [1, 5, '小寒', 'しょうかん', '寒さが厳しくなるころ', 'winter'],
+  [1, 20, '大寒', 'だいかん', '一年でいちばん寒いころ', 'winter'],
+  [2, 4, '立春', 'りっしゅん', '暦の上で春がはじまる', 'spring'],
+  [2, 19, '雨水', 'うすい', '雪が雨に変わるころ', 'spring'],
+  [3, 5, '啓蟄', 'けいちつ', '虫が土から出てくるころ', 'spring'],
+  [3, 20, '春分', 'しゅんぶん', '昼と夜が同じ長さになる', 'spring'],
+  [4, 4, '清明', 'せいめい', 'すべてが清らかに明るいころ', 'spring'],
+  [4, 20, '穀雨', 'こくう', '穀物をうるおす春の雨', 'spring'],
+  [5, 5, '立夏', 'りっか', '暦の上で夏がはじまる', 'summer'],
+  [5, 21, '小満', 'しょうまん', '草木が育ち満ちていくころ', 'summer'],
+  [6, 5, '芒種', 'ぼうしゅ', '稲や麦の種をまくころ', 'summer'],
+  [6, 21, '夏至', 'げし', '一年で昼がいちばん長い', 'summer'],
+  [7, 7, '小暑', 'しょうしょ', '暑さが本格的になるころ', 'summer'],
+  [7, 22, '大暑', 'たいしょ', '一年でいちばん暑いころ', 'summer'],
+  [8, 7, '立秋', 'りっしゅう', '暦の上で秋がはじまる', 'autumn'],
+  [8, 23, '処暑', 'しょしょ', '暑さがおさまるころ', 'autumn'],
+  [9, 7, '白露', 'はくろ', '草に白い露が宿るころ', 'autumn'],
+  [9, 23, '秋分', 'しゅうぶん', '昼と夜が同じ長さになる', 'autumn'],
+  [10, 8, '寒露', 'かんろ', '冷たい露が降りるころ', 'autumn'],
+  [10, 23, '霜降', 'そうこう', '霜が降りはじめるころ', 'autumn'],
+  [11, 7, '立冬', 'りっとう', '暦の上で冬がはじまる', 'winter'],
+  [11, 22, '小雪', 'しょうせつ', '雪がちらつきはじめるころ', 'winter'],
+  [12, 7, '大雪', 'たいせつ', '雪が本格的に降るころ', 'winter'],
+  [12, 22, '冬至', 'とうじ', '一年で夜がいちばん長い', 'winter'],
+];
+function sekkiNow(d = new Date()) {
+  const m = d.getMonth() + 1, day = d.getDate();
+  let cur = SEKKI[SEKKI.length - 1];
+  for (const s of SEKKI) if (m > s[0] || (m === s[0] && day >= s[1])) cur = s;
+  return { name: cur[2], yomi: cur[3], desc: cur[4], season: cur[5] };
+}
+const SEASON_NAME = { spring: '春', summer: '夏', autumn: '秋', winter: '冬' };
+
+// ================= 景色 =================
+const SCENES = {
+  night: { name: '夜', top: '#0f2431', bot: '#040a0f', glow: '#f2ead0', gx: .72, gy: .2, ga: .55, rip: '#d6e6f0', ripS: '#000000', pad: '#1c3829', padHi: '#3f6a4c', fog: 0, dark: 1, key: 50, minor: true },
+  dawn: { name: '朝', top: '#9db2bb', bot: '#4c6b78', glow: '#fff3da', gx: .28, gy: .15, ga: .6, rip: '#ffffff', ripS: '#28434f', pad: '#47704f', padHi: '#8db58a', fog: .6, dark: .1, key: 55, minor: false },
+  day: { name: '昼', top: '#3b827d', bot: '#0f3533', glow: '#fffbe6', gx: .62, gy: .12, ga: .5, rip: '#eafcf6', ripS: '#05201f', pad: '#3c6c39', padHi: '#7fae68', fog: 0, dark: 0, key: 48, minor: false },
+  dusk: { name: '夕', top: '#573559', bot: '#15112a', glow: '#ffb27a', gx: .26, gy: .22, ga: .65, rip: '#ffe2cf', ripS: '#120a1a', pad: '#2b392c', padHi: '#61724f', fog: 0, dark: .75, key: 45, minor: true },
+};
+const todNow = () => { const h = new Date().getHours(); return h >= 5 && h < 9 ? 'dawn' : h >= 9 && h < 16 ? 'day' : h >= 16 && h < 19 ? 'dusk' : 'night'; };
+
+// ================= 鯉 =================
+const KINDS = [
+  { id: 'kohaku', name: '紅白', rare: 1, desc: '白地に緋色の模様。いちばん親しまれている鯉' },
+  { id: 'sanke', name: '大正三色', rare: 1, desc: '紅白に、墨の小さな斑が入る' },
+  { id: 'showa', name: '昭和三色', rare: 2, desc: '墨の地に緋と白。力強い模様' },
+  { id: 'tancho', name: '丹頂', rare: 3, desc: '頭に丸い緋がひとつだけ。日の丸のよう' },
+  { id: 'shiro', name: '白写り', rare: 1, desc: '白い地に、墨の大きな模様' },
+  { id: 'hiutsuri', name: '緋写り', rare: 2, desc: '墨の地に、濃い緋の模様' },
+  { id: 'asagi', name: '浅黄', rare: 2, desc: '藍色の網目に、脇の緋。古くからの品種' },
+  { id: 'shusui', name: '秋翠', rare: 3, desc: '背に藍の鱗が一列に並ぶ、すっきりとした鯉' },
+  { id: 'ogon', name: '黄金', rare: 2, desc: '全身が金色に光る' },
+  { id: 'platinum', name: 'プラチナ', rare: 2, desc: '全身が白金色に光る' },
+  { id: 'kujaku', name: '孔雀', rare: 3, desc: '光る肌に網目と緋。華やかな鯉' },
+  { id: 'chagoi', name: '茶鯉', rare: 1, desc: '落ち着いた茶色。人によく慣れる' },
+];
+const KIND = Object.fromEntries(KINDS.map(k => [k.id, k]));
+const RARE_LABEL = { 1: 'よく見る', 2: 'ときどき', 3: 'めずらしい' };
+const STAGES = [[0, '稚魚'], [6, '若鯉'], [20, '成鯉'], [45, '大鯉']];
+const stageOf = xp => { let s = 0; for (let i = 0; i < STAGES.length; i++) if (xp >= STAGES[i][0]) s = i; return s; };
+const koiScale = xp => .5 + .62 * (1 - Math.exp(-xp / 22));
+const VERSION = '1.1.0';
+const SUPPORT_URL = 'https://kiyotake1229.github.io/nagi-pond/support.html';
+const POND_MAX = 9;
+const BLOOM_NEED = 4; // つぼみが開くのに必要な波紋の量
+
+// 個体ごとの模様（種類と種から毎回同じ模様を作る）
+function makeLook(kind, seed) {
+  const r = mulberry(seed * 7919 + 17);
+  const R = '#d8432a', B = '#18171b', O = '#e8783c', W = '#f6f2ea';
+  const L = { base: W, fin: '#f1ece2', metal: false, net: null, spots: [] };
+  const patch = (t, o, size, col, n = 5) => { for (let i = 0; i < n; i++) L.spots.push({ t: t + (r() - .5) * size * 1.5, o: o + (r() - .5) * size * 1.3, r: size * (.55 + r() * .5), c: col }); };
+  const redPatches = (col = R) => {
+    if (r() < .75) patch(.05 + r() * .06, (r() - .5) * .03, .05, col, 4);
+    const n = 1 + Math.floor(r() * 3);
+    for (let i = 0; i < n; i++) patch(.22 + (i / n) * .5 + r() * .12, (r() - .5) * .07, .045 + r() * .02, col, 5);
+  };
+  switch (kind) {
+    case 'kohaku': redPatches(); break;
+    case 'sanke': redPatches(); for (let i = 0, n = 4 + Math.floor(r() * 4); i < n; i++) L.spots.push({ t: .2 + r() * .55, o: (r() - .5) * .2, r: .014 + r() * .016, c: B }); break;
+    case 'showa': L.base = B; L.fin = '#2d2a2c'; redPatches(); for (let i = 0; i < 3; i++) patch(.1 + r() * .65, (r() - .5) * .12, .04, W, 3); break;
+    case 'tancho': L.spots.push({ t: .085, o: 0, r: .048, c: R }); break;
+    case 'shiro': L.fin = '#eeeae2'; patch(.05, (r() - .5) * .04, .035, B, 3); for (let i = 0; i < 3; i++) patch(.25 + i * .19 + r() * .08, (r() - .5) * .14, .05, B, 4); break;
+    case 'hiutsuri': L.base = B; L.fin = '#3a2a26'; for (let i = 0; i < 4; i++) patch(.06 + i * .19 + r() * .07, (r() - .5) * .12, .055, '#e05a2e', 5); break;
+    case 'asagi': L.base = '#7c97ab'; L.fin = '#e6875c'; L.net = 'rgba(200,216,226,.55)'; for (let i = 0; i < 6; i++) { const t = .06 + i * .12; L.spots.push({ t, o: .115, r: .045, c: '#e06a3d' }, { t, o: -.115, r: .045, c: '#e06a3d' }); } break;
+    case 'shusui': L.base = '#a8bfcc'; L.fin = '#ec8d5c'; for (let t = .14; t < .82; t += .065) L.spots.push({ t, o: .022, r: .015, c: '#2e4b6c' }, { t: t + .03, o: -.022, r: .015, c: '#2e4b6c' }); for (let i = 0; i < 5; i++) { const t = .1 + i * .13; L.spots.push({ t, o: .12, r: .04, c: '#e8793f' }, { t, o: -.12, r: .04, c: '#e8793f' }); } break;
+    case 'ogon': L.base = '#e5b447'; L.fin = '#efc766'; L.metal = true; break;
+    case 'platinum': L.base = '#e3e6e7'; L.fin = '#eef0f0'; L.metal = true; break;
+    case 'kujaku': L.base = '#eceeec'; L.fin = '#f0e6dc'; L.metal = true; L.net = 'rgba(110,128,142,.55)'; for (let i = 0; i < 3; i++) patch(.1 + i * .22 + r() * .08, (r() - .5) * .1, .045, '#ea7a3c', 4); break;
+    case 'chagoi': L.base = '#8a6a49'; L.fin = '#9a7a57'; L.net = 'rgba(70,50,32,.55)'; break;
+  }
+  return L;
+}
+
+// ================= 蓮・しつらえ =================
+const LOTUS = {
+  pink: { name: '薄紅', a: '#f8d6de', b: '#ef9fb4', c: '#df7b97' },
+  white: { name: '白蓮', a: '#fdfaf2', b: '#f0e8da', c: '#dccfb8' },
+  yellow: { name: '黄蓮', a: '#fcf0c2', b: '#f2d77e', c: '#e0b64c' },
+  blue: { name: '青蓮', a: '#e2e9fb', b: '#aabef0', c: '#7d95da' },
+  purple: { name: '紫蓮', a: '#f1e2fa', b: '#d0afea', c: '#a884ce' },
+};
+const UNLOCKS = [
+  { at: 2, key: 'white', name: '白蓮', desc: '白い蓮も咲くようになります' },
+  { at: 4, key: 'shishi', name: '鹿威し', desc: 'ときどき、竹の音が響きます' },
+  { at: 6, key: 'yellow', name: '黄蓮', desc: '黄色い蓮も咲くようになります' },
+  { at: 9, key: 'blue', name: '青蓮', desc: '青い蓮も咲くようになります' },
+  { at: 12, key: 'lantern', name: '浮き灯籠', desc: '夕暮れと夜に、灯籠が浮かびます' },
+  { at: 16, key: 'purple', name: '紫蓮', desc: '紫の蓮も咲くようになります' },
+];
+const BREATH = {
+  totonou: { name: 'ととのう', sub: '5秒吸って、5秒吐く', steps: [['in', 5], ['out', 5]] },
+  nemuru: { name: 'ねむる', sub: '4秒吸って、7秒とめて、8秒吐く', steps: [['in', 4], ['hold', 7], ['out', 8]] },
+  shizumeru: { name: 'しずめる', sub: '4秒ずつ、吸う・とめる・吐く・とめる', steps: [['in', 4], ['hold', 4], ['out', 4], ['rest', 4]] },
+};
+const PHASE_LABEL = { in: '吸う', hold: 'とめる', out: '吐く', rest: 'とめる' };
+
+// ================= ネイティブ（iOS アプリ版）との橋渡し。Web版ではすべて使わない =================
+const NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+const CAP = (window.Capacitor && window.Capacitor.Plugins) || {};
+
+// ================= 保存 =================
+const KEY = 'nagi.v1';
+const fresh = () => ({
+  v: 1, created: Date.now(), nextId: 1, koi: [], seen: {}, blooms: 0, fulls: 0, days: {}, breaths: 0, breathSec: 0, hint: 0,
+  set: { bgm: true, sfx: true, vib: true, vol: .75, mute: false, scene: 'auto', season: 'auto', shishi: true, lantern: true, bp: 'totonou', blen: 3, notify: false, notifyHour: 21 },
+});
+function load() {
+  const d = fresh();
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) {
+      const o = JSON.parse(raw);
+      if (o && typeof o === 'object') {
+        Object.assign(d, o);
+        d.set = Object.assign(fresh().set, o.set || {});
+        if (!Array.isArray(d.koi)) d.koi = [];
+        d.koi = d.koi.filter(k => k && KIND[k.kind]);
+        if (!d.seen || typeof d.seen !== 'object') d.seen = {};
+        if (!d.days || typeof d.days !== 'object') d.days = {};
+      }
+    }
+  } catch (e) { /* 読めなければ初期状態で始める */ }
+  // 70日より前の記録は消す
+  const lim = new Date(); lim.setDate(lim.getDate() - 70);
+  const limKey = dayKey(lim);
+  for (const k of Object.keys(d.days)) if (k < limKey) delete d.days[k];
+  return d;
+}
+let S = load();
+let nativeSaveT = 0;
+function save() {
+  const json = JSON.stringify(S);
+  try { localStorage.setItem(KEY, json); } catch (e) { /* 保存できない環境でも遊べる */ }
+  // iOS アプリ版は端末のアプリ用の保存領域にも書く（WebView の保存領域が消えたときの備え）
+  if (NATIVE && CAP.Preferences) { clearTimeout(nativeSaveT); nativeSaveT = setTimeout(() => { try { CAP.Preferences.set({ key: KEY, value: json }); } catch (e) {} }, 400); }
+}
+// アプリ版で WebView 側の保存が消えていたら、アプリ用の保存領域から戻す
+async function restoreNative() {
+  if (!(NATIVE && CAP.Preferences)) return;
+  try {
+    let has = false; try { has = !!localStorage.getItem(KEY); } catch (e) {}
+    if (has) return;
+    const r = await CAP.Preferences.get({ key: KEY });
+    if (r && r.value) { localStorage.setItem(KEY, r.value); location.reload(); }
+  } catch (e) {}
+}
+const koiLabel = d => d.name ? d.name : KIND[d.kind].name;
+function newKoiData(kind, xp = 0) { const k = { id: S.nextId++, kind, seed: Math.floor(Math.random() * 1e9), xp, born: Date.now() }; return k; }
+function ensureStarterKoi() {
+  if (S.koi.length) return;
+  S.koi.push(newKoiData('kohaku', 9), newKoiData('sanke', 4), newKoiData('chagoi', 14));
+  for (const k of S.koi) S.seen[k.kind] = true;
+  save();
+}
+ensureStarterKoi();
+const unlocked = key => { const u = UNLOCKS.find(u => u.key === key); return !!u && S.fulls >= u.at; };
+
+// ================= 音 =================
+const A = { ctx: null, ready: false, chordIdx: 0, nextChord: 0, nextCricket: 0 };
+const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+function impulse(ctx, sec, decay) {
+  const rate = ctx.sampleRate, len = Math.floor(rate * sec), buf = ctx.createBuffer(2, len, rate);
+  for (let ch = 0; ch < 2; ch++) { const d = buf.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay); }
+  return buf;
+}
+function audioStart() {
+  if (A.ctx) { if (A.ctx.state !== 'running' && !sleeping) A.ctx.resume().catch(() => {}); return; }
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  let ctx;
+  try { ctx = new AC(); } catch (e) { return; }
+  A.ctx = ctx;
+  A.master = ctx.createGain(); A.master.gain.value = masterLevel();
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -16; comp.knee.value = 12; comp.ratio.value = 3; comp.attack.value = .01; comp.release.value = .3;
+  A.master.connect(comp); comp.connect(ctx.destination);
+  A.verb = ctx.createConvolver(); A.verb.buffer = impulse(ctx, 3.4, 2.4);
+  const vr = ctx.createGain(); vr.gain.value = .9; A.verb.connect(vr); vr.connect(A.master);
+  A.sfx = ctx.createGain(); A.sfx.gain.value = S.set.sfx ? 1 : 0; A.sfx.connect(A.master);
+  const s2 = ctx.createGain(); s2.gain.value = .5; A.sfx.connect(s2); s2.connect(A.verb);
+  A.bgm = ctx.createGain(); A.bgm.gain.value = S.set.bgm ? 1 : 0; A.bgm.connect(A.master);
+  const b2 = ctx.createGain(); b2.gain.value = .6; A.bgm.connect(b2); b2.connect(A.verb);
+  // 白いノイズ（鹿威しや水音に使う）
+  A.noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+  { const d = A.noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+  // 水の音（低くこもったノイズ）
+  const len = ctx.sampleRate * 4, nb = ctx.createBuffer(1, len, ctx.sampleRate), d = nb.getChannelData(0);
+  let v = 0; for (let i = 0; i < len; i++) { v = (v + .02 * (Math.random() * 2 - 1)) / 1.02; d[i] = v * 3.5; }
+  const drift = d[len - 1] - d[0]; for (let i = 0; i < len; i++) d[i] -= drift * i / len;
+  const src = ctx.createBufferSource(); src.buffer = nb; src.loop = true;
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420;
+  const wg = ctx.createGain(); wg.gain.value = .13;
+  const lfo = ctx.createOscillator(); lfo.frequency.value = .07; const lg = ctx.createGain(); lg.gain.value = .05; lfo.connect(lg); lg.connect(wg.gain);
+  src.connect(lp); lp.connect(wg); wg.connect(A.bgm); src.start(); lfo.start();
+  A.ready = true; A.nextChord = T + .5; A.nextCricket = T + 3;
+}
+const masterLevel = () => S.set.mute ? 0 : S.set.vol * .9;
+function applyAudio() {
+  if (!A.ready) return;
+  const t = A.ctx.currentTime;
+  A.master.gain.setTargetAtTime(sleeping ? 0 : masterLevel(), t, .15);
+  A.sfx.gain.setTargetAtTime(S.set.sfx ? 1 : 0, t, .1);
+  A.bgm.gain.setTargetAtTime(S.set.bgm ? 1 : 0, t, .4);
+}
+function out(g, pan, bus) {
+  if (A.ctx.createStereoPanner) { const p = A.ctx.createStereoPanner(); p.pan.value = clamp(pan, -1, 1); g.connect(p); p.connect(bus); }
+  else g.connect(bus);
+}
+// 鐘のような音
+function bell(m, o = {}) {
+  if (!A.ready) return;
+  const ctx = A.ctx, t = ctx.currentTime + (o.when || 0), f = mtof(m), vel = o.vel || .2, dur = o.dur || 2.6;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(vel, t + .012); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  out(g, o.pan || 0, o.bus || A.sfx);
+  const parts = [[1, 1, 1], [2, .22, .35], [3.01, .07, .15]];
+  for (const [mul, amp, dk] of parts) {
+    const os = ctx.createOscillator(); os.type = 'sine'; os.frequency.value = f * mul;
+    const pg = ctx.createGain(); pg.gain.setValueAtTime(amp, t); if (dk < 1) pg.gain.exponentialRampToValueAtTime(.001, t + dur * dk);
+    os.connect(pg); pg.connect(g); os.start(t); os.stop(t + dur + .05);
+  }
+}
+// しずくの音
+function plink(m, o = {}) {
+  if (!A.ready) return;
+  const ctx = A.ctx, t = ctx.currentTime + (o.when || 0), f = mtof(m), vel = o.vel || .1;
+  const os = ctx.createOscillator(); os.type = 'sine';
+  os.frequency.setValueAtTime(f * .72, t); os.frequency.exponentialRampToValueAtTime(f * 1.45, t + .07);
+  const g = ctx.createGain(); g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(vel, t + .006); g.gain.exponentialRampToValueAtTime(.0001, t + .28);
+  os.connect(g); out(g, o.pan || 0, o.bus || A.sfx); os.start(t); os.stop(t + .32);
+}
+function scene() { return SCENES[sceneKey]; }
+function scaleNotes() {
+  const sc = scene(), iv = sc.minor ? [0, 3, 5, 7, 10] : [0, 2, 4, 7, 9], n = [];
+  for (let o = 1; o <= 3; o++) for (const i of iv) n.push(sc.key + 12 * o + i);
+  return n;
+}
+function noteAtX(x) { const n = scaleNotes(); return n[2 + clamp(Math.floor(x / W * 11), 0, 10)]; }
+function padChord() {
+  const sc = scene(), ctx = A.ctx;
+  const sets = sc.minor ? [[0, 7, 15, 19], [-2, 5, 10, 15], [3, 10, 15, 22], [-7, 5, 12, 17]] : [[0, 7, 14, 16], [-3, 4, 9, 14], [2, 9, 14, 19], [-5, 4, 7, 14]];
+  A.chordIdx = (A.chordIdx + 1 + (Math.random() < .3 ? 1 : 0)) % sets.length;
+  const t = ctx.currentTime, dur = 15;
+  for (const iv of sets[A.chordIdx]) {
+    const os = ctx.createOscillator(); os.type = 'triangle'; os.frequency.value = mtof(sc.key + iv); os.detune.value = rand(-7, 7);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 760; lp.Q.value = .3;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.028, t + 5); g.gain.setValueAtTime(.028, t + dur - 6); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    os.connect(lp); lp.connect(g); out(g, rand(-.5, .5), A.bgm); os.start(t); os.stop(t + dur + .1);
+  }
+}
+function noiseHit(t, o) {
+  const ctx = A.ctx, src = ctx.createBufferSource(); src.buffer = A.noise;
+  const f = ctx.createBiquadFilter(); f.type = o.type || 'bandpass'; f.frequency.value = o.freq; f.Q.value = o.q || 1;
+  const g = ctx.createGain(); g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(o.vel, t + (o.atk || .004)); g.gain.exponentialRampToValueAtTime(.0001, t + o.dur);
+  src.connect(f); f.connect(g); out(g, o.pan || 0, o.bus || A.sfx); src.start(t); src.stop(t + o.dur + .05);
+}
+function shishiSound() {
+  if (!A.ready) return;
+  const ctx = A.ctx, t = ctx.currentTime;
+  noiseHit(t, { freq: 1250, q: 5, vel: .5, dur: .14, pan: -.55, bus: A.bgm });
+  const os = ctx.createOscillator(); os.type = 'sine'; os.frequency.setValueAtTime(320, t); os.frequency.exponentialRampToValueAtTime(150, t + .12);
+  const g = ctx.createGain(); g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.28, t + .004); g.gain.exponentialRampToValueAtTime(.0001, t + .3);
+  os.connect(g); out(g, -.55, A.bgm); os.start(t); os.stop(t + .35);
+  noiseHit(t + .35, { type: 'lowpass', freq: 900, vel: .05, atk: .25, dur: 1.5, pan: -.5, bus: A.bgm });
+}
+function cricket() {
+  if (!A.ready) return;
+  const ctx = A.ctx, t0 = ctx.currentTime, n = 3 + Math.floor(Math.random() * 3), pan = rand(-.85, .85);
+  const os = ctx.createOscillator(); os.type = 'sine'; os.frequency.value = rand(4100, 4700);
+  const g = ctx.createGain(); g.gain.setValueAtTime(0, t0);
+  for (let i = 0; i < n; i++) { const t = t0 + i * .065; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.011, t + .008); g.gain.linearRampToValueAtTime(0, t + .04); }
+  os.connect(g); out(g, pan, A.bgm); os.start(t0); os.stop(t0 + n * .065 + .1);
+}
+function audioTick() {
+  if (!A.ready || sleeping) return;
+  if (T > A.nextChord) { padChord(); A.nextChord = T + 11; }
+  const sea = seasonKey;
+  if ((sea === 'autumn' || sea === 'summer') && P.dark > .5 && T > A.nextCricket) { cricket(); A.nextCricket = T + rand(1.2, 4.5); }
+}
+
+// ================= 触覚 =================
+function buzz(kind = 'light') {
+  if (!S.set.vib) return;
+  const H = NATIVE && CAP.Haptics;
+  try {
+    if (H) { kind === 'success' ? H.notification({ type: 'SUCCESS' }) : H.impact({ style: kind === 'medium' ? 'MEDIUM' : 'LIGHT' }); return; }
+    if (navigator.vibrate) navigator.vibrate(kind === 'success' ? [14, 70, 22] : kind === 'medium' ? 16 : 7);
+  } catch (e) { /* 振動できない端末 */ }
+}
+
+// ================= 描画の準備 =================
+const cv = $('pond'), c = cv.getContext('2d');
+let W = 0, H = 0, U = 0, DPR = 1, baseLen = 80;
+let vignette = null, fogTex = null;
+let T = 0;
+let sceneKey = S.set.scene === 'auto' ? todNow() : S.set.scene;
+let seasonKey = S.set.season === 'auto' ? sekkiNow().season : S.set.season;
+function palOf(k) { const s = SCENES[k]; return { top: hex(s.top), bot: hex(s.bot), glow: hex(s.glow), rip: hex(s.rip), ripS: hex(s.ripS), pad: hex(s.pad), padHi: hex(s.padHi), gx: s.gx, gy: s.gy, ga: s.ga, fog: s.fog, dark: s.dark }; }
+let P = palOf(sceneKey), PT = palOf(sceneKey);
+function stepPal(dt) {
+  const k = 1 - Math.exp(-dt * .7);
+  for (const key in P) { if (Array.isArray(P[key])) for (let i = 0; i < 3; i++) P[key][i] += (PT[key][i] - P[key][i]) * k; else P[key] += (PT[key] - P[key]) * k; }
+}
+const sprites = new Map();
+function glowSprite(col) {
+  col = col.map(v => Math.round(v / 8) * 8);
+  const key = col.join(',');
+  if (sprites.size > 48) sprites.clear();
+  let s = sprites.get(key); if (s) return s;
+  s = document.createElement('canvas'); s.width = s.height = 64;
+  const g = s.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, rgba(col, 1)); gr.addColorStop(.22, rgba(col, .55)); gr.addColorStop(.55, rgba(col, .14)); gr.addColorStop(1, rgba(col, 0));
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64); sprites.set(key, s); return s;
+}
+function drawGlow(col, x, y, r, a) {
+  if (a <= .002) return;
+  c.globalCompositeOperation = 'lighter'; c.globalAlpha = Math.min(1, a);
+  c.drawImage(glowSprite(col), x - r, y - r, r * 2, r * 2);
+  c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1;
+}
+function resize() {
+  W = window.innerWidth; H = window.innerHeight; U = Math.min(W, H);
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  if (W * H * DPR * DPR > 3.6e6) DPR = Math.sqrt(3.6e6 / (W * H));
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  c.setTransform(DPR, 0, 0, DPR, 0, 0);
+  baseLen = clamp(U * .29, 72, 150);
+  // 四隅を暗くする
+  vignette = document.createElement('canvas'); vignette.width = Math.ceil(W / 2); vignette.height = Math.ceil(H / 2);
+  { const g = vignette.getContext('2d'), w = vignette.width, h = vignette.height, gr = g.createRadialGradient(w / 2, h * .46, Math.min(w, h) * .3, w / 2, h / 2, Math.hypot(w, h) * .62); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,.5)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); }
+  // 朝霧の帯
+  fogTex = document.createElement('canvas'); fogTex.width = Math.ceil(W / 3); fogTex.height = Math.ceil(H / 3);
+  { const g = fogTex.getContext('2d'), w = fogTex.width, h = fogTex.height, r = mulberry(42);
+    // 横に並べても継ぎ目が出ないよう、同じ霧を左右にも描く
+    for (let i = 0; i < 14; i++) {
+      const x0 = r() * w, y = r() * h, rad = (.25 + r() * .3) * Math.min(w * 1.4, Math.max(w, h));
+      for (const x of [x0 - w, x0, x0 + w]) { const gr = g.createRadialGradient(x, y, 0, x, y, rad); gr.addColorStop(0, 'rgba(255,255,255,.3)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); }
+    } }
+  for (const p of pads) { p.x = clamp(p.x, U * .12, W - U * .12); p.y = clamp(p.y, H * .17, H * .78); p.r = padRadius(); }
+}
+const padRadius = () => clamp(U * .078, 22, 44);
+
+// ================= 世界 =================
+const ripples = [], pellets = [], koi = [], pads = [], floaters = [], air = [], lights = [], lanterns = [];
+let rippleId = 0;
+const flow = { a: rand(TAU), x: 0, y: 0 };
+let flash = 0;
+
+function addRipple(x, y, o = {}) {
+  const r = { x, y, t: 0, life: o.life || 4.2, R: o.R || U * .52, power: o.power === undefined ? 1 : o.power, w: o.w || 1, a: o.a || 1, hit: new Set(), id: rippleId++ };
+  ripples.push(r); if (ripples.length > 56) ripples.shift();
+  return r;
+}
+
+// ---------- 鯉 ----------
+const KN = 12;
+const prof = t => t < .28 ? .62 + .38 * Math.sin(t / .28 * Math.PI / 2) : 1 - .8 * Math.pow((t - .28) / .72, 1.5);
+class Koi {
+  constructor(d, o = {}) {
+    this.d = d; this.look = makeLook(d.kind, d.seed); this.visitor = !!o.visitor; this.leaveAt = o.leaveAt || 0; this.leaving = false; this.gone = false;
+    const r = mulberry(d.seed + 1); this.ph = r() * TAU;
+    let x, y, a;
+    if (o.enter) {
+      const side = Math.floor(Math.random() * 4), m = this.len * 1.2;
+      if (side === 0) { x = -m; y = rand(H * .3, H * .7); a = 0; }
+      else if (side === 1) { x = W + m; y = rand(H * .3, H * .7); a = Math.PI; }
+      else if (side === 2) { x = rand(W * .25, W * .75); y = -m; a = Math.PI / 2; }
+      else { x = rand(W * .25, W * .75); y = H + m; a = -Math.PI / 2; }
+      this.fade = 1;
+    } else { x = rand(W * .15, W * .85); y = rand(H * .2, H * .8); a = rand(TAU); this.fade = 0; }
+    this.angle = a; this.wander = a; this.speed = this.len * .3; this.phase = r() * TAU; this.finPh = r() * TAU;
+    this.depth = r() * .8; this.hunger = rand(0, 1.5); this.food = null; this.alpha = o.enter ? 1 : 0;
+    this.pts = []; const seg = this.len * .78 / (KN - 1);
+    for (let i = 0; i < KN; i++) this.pts.push({ x: x - Math.cos(a) * seg * i, y: y - Math.sin(a) * seg * i });
+  }
+  get len() { return baseLen * koiScale(this.d.xp); }
+  update(dt) {
+    const L = this.len, h = this.pts[0];
+    this.alpha = Math.min(1, this.alpha + dt * .5);
+    this.phase += dt * (2.2 + this.speed / L * 5);
+    this.finPh += dt * (1.4 + this.speed / L * 3);
+    this.hunger -= dt;
+    this.wander += (Math.random() - .5) * dt * 2.4 + Math.sin(T * .13 + this.ph) * dt * .3;
+    this.wander += angDiff(this.angle, this.wander) * dt * .25;
+    let sx = Math.cos(this.wander), sy = Math.sin(this.wander);
+    let target = L * (.3 + .12 * Math.sin(T * .21 + this.ph)), turn = 1.15;
+    if (this.food && !this.food.alive) this.food = null;
+    if (!this.food && this.hunger <= 0 && pellets.length && !this.leaving) {
+      let best = null, bd = U * .62;
+      for (const p of pellets) { if (!p.alive) continue; const d = Math.hypot(p.x - h.x, p.y - h.y); if (d < bd) { bd = d; best = p; } }
+      this.food = best;
+    }
+    if (this.food) {
+      const dx = this.food.x - h.x, dy = this.food.y - h.y, d = Math.hypot(dx, dy) || 1;
+      sx += dx / d * 3.2; sy += dy / d * 3.2; target = L * (d < L ? .55 : 1); turn = 2.8;
+      if (d < L * .1 + 7) this.eat(this.food);
+    }
+    if (!this.visitor && !this.leaving) {
+      const m = U * .13;
+      if (h.x < m) sx += (m - h.x) / m * 2.6; if (h.x > W - m) sx -= (h.x - (W - m)) / m * 2.6;
+      if (h.y < m) sy += (m - h.y) / m * 2.6; if (h.y > H - m) sy -= (h.y - (H - m)) / m * 2.6;
+    } else if (this.visitor) {
+      if (!this.leaving && T > this.leaveAt) { this.leaving = true; this.exitA = Math.atan2(h.y - H / 2, h.x - W / 2); }
+      if (this.leaving) { sx += Math.cos(this.exitA) * 2.5; sy += Math.sin(this.exitA) * 2.5; target = L * .45; if (h.x < -L * 1.6 || h.x > W + L * 1.6 || h.y < -L * 1.6 || h.y > H + L * 1.6) this.gone = true; }
+      else { const m = U * .13; if (h.x < m) sx += 2; if (h.x > W - m) sx -= 2; if (h.y < m) sy += 2; if (h.y > H - m) sy -= 2; }
+    }
+    for (const o of koi) {
+      if (o === this) continue;
+      const q = o.pts[0], dx = h.x - q.x, dy = h.y - q.y, d = Math.hypot(dx, dy), lim = (L + o.len) * .42;
+      if (d > 0 && d < lim) { sx += dx / d * (1 - d / lim) * 1.6; sy += dy / d * (1 - d / lim) * 1.6; }
+    }
+    const want = Math.atan2(sy, sx);
+    this.angle += clamp(angDiff(want, this.angle), -turn * dt, turn * dt);
+    this.speed = lerp(this.speed, target, 1 - Math.exp(-dt * 1.6));
+    const ma = this.angle + Math.sin(this.phase) * .2;
+    h.x += Math.cos(ma) * this.speed * dt; h.y += Math.sin(ma) * this.speed * dt;
+    this.follow();
+    const dTarget = this.food ? .02 : .45 + .4 * Math.sin(T * .05 + this.ph * 3);
+    this.depth = lerp(this.depth, dTarget, 1 - Math.exp(-dt * .5));
+  }
+  follow() {
+    const p = this.pts, seg = this.len * .78 / (KN - 1);
+    let prev = this.angle;
+    for (let i = 1; i < KN; i++) {
+      const a = p[i - 1], b = p[i];
+      let ang = Math.atan2(a.y - b.y, a.x - b.x);
+      const d = angDiff(ang, prev), lim = .3;
+      if (d > lim) ang = prev + lim; else if (d < -lim) ang = prev - lim;
+      b.x = a.x - Math.cos(ang) * seg; b.y = a.y - Math.sin(ang) * seg; prev = ang;
+    }
+  }
+  eat(p) {
+    p.alive = false; this.food = null; this.hunger = rand(2.5, 6);
+    addRipple(p.x, p.y, { R: U * .07, life: 1.3, power: 0, a: .7 });
+    if (started) plink(noteAtX(p.x) + 12, { vel: .045, pan: p.x / W * 2 - 1 });
+    if (this.visitor) return;
+    const before = stageOf(this.d.xp);
+    this.d.xp++;
+    const after = stageOf(this.d.xp);
+    if (after > before) {
+      toast(`${koiLabel(this.d)}が${STAGES[after][1]}に育ちました`, after === 3 ? 'これ以上は大きくなりません' : (this.d.name ? KIND[this.d.kind].name : '図鑑で名前を付けられます'));
+      bell(scene().key + 31, { vel: .1, dur: 3 }); bell(scene().key + 36, { vel: .08, dur: 3, when: .14 }); buzz('medium');
+    }
+    saveSoon();
+  }
+  draw(ctx) {
+    const L = this.len * (1 - this.depth * .07);
+    drawKoi(ctx, this.pts, this.look, L, { alpha: this.alpha * (1 - this.depth * .32), shadow: 3 + (1 - this.depth) * 8, finPh: this.finPh, tint: this.depth * .38 });
+  }
+}
+
+function spinePoint(pts, t) {
+  const f = clamp(t, 0, 1) * (pts.length - 1), i = Math.min(pts.length - 2, Math.floor(f)), k = f - i, a = pts[i], b = pts[i + 1];
+  const dx = a.x - b.x, dy = a.y - b.y, m = Math.hypot(dx, dy) || 1;
+  return { x: lerp(a.x, b.x, k), y: lerp(a.y, b.y, k), dx: dx / m, dy: dy / m };
+}
+function koiPath(ctx, pts, len) {
+  const N = pts.length, Lp = [], Rp = [];
+  let d0x = 1, d0y = 0, w0 = 0;
+  for (let i = 0; i < N; i++) {
+    let dx, dy;
+    if (i === 0) { dx = pts[0].x - pts[1].x; dy = pts[0].y - pts[1].y; } else { dx = pts[i - 1].x - pts[i].x; dy = pts[i - 1].y - pts[i].y; }
+    const m = Math.hypot(dx, dy) || 1; dx /= m; dy /= m;
+    const w = len * .125 * prof(i / (N - 1));
+    if (i === 0) { d0x = dx; d0y = dy; w0 = w; }
+    Lp.push([pts[i].x - dy * w, pts[i].y + dx * w]); Rp.push([pts[i].x + dy * w, pts[i].y - dx * w]);
+  }
+  ctx.beginPath(); ctx.moveTo(Lp[0][0], Lp[0][1]);
+  for (let i = 1; i < N - 1; i++) ctx.quadraticCurveTo(Lp[i][0], Lp[i][1], (Lp[i][0] + Lp[i + 1][0]) / 2, (Lp[i][1] + Lp[i + 1][1]) / 2);
+  ctx.lineTo(Lp[N - 1][0], Lp[N - 1][1]); ctx.lineTo(Rp[N - 1][0], Rp[N - 1][1]);
+  for (let i = N - 2; i > 0; i--) ctx.quadraticCurveTo(Rp[i][0], Rp[i][1], (Rp[i][0] + Rp[i - 1][0]) / 2, (Rp[i][1] + Rp[i - 1][1]) / 2);
+  ctx.lineTo(Rp[0][0], Rp[0][1]);
+  const k = w0 * 1.25;
+  ctx.bezierCurveTo(Rp[0][0] + d0x * k, Rp[0][1] + d0y * k, Lp[0][0] + d0x * k, Lp[0][1] + d0y * k, Lp[0][0], Lp[0][1]);
+  ctx.closePath();
+}
+function finsPath(ctx, pts, len, finPh) {
+  const N = pts.length;
+  // 胸びれ・腹びれ
+  for (const [t, fl, base, amp] of [[.2, .21, 1.0, .28], [.55, .11, .75, .18]]) {
+    const s = spinePoint(pts, t), w = len * .125 * prof(t), a = Math.atan2(-s.dy, -s.dx);
+    for (const side of [1, -1]) {
+      const bx = s.x + -s.dy * w * .7 * side, by = s.y + s.dx * w * .7 * side;
+      const fa = a + side * (base + Math.sin(finPh + (side > 0 ? 0 : 1.3)) * amp);
+      const L = len * fl;
+      ctx.moveTo(bx, by);
+      ctx.ellipse(bx + Math.cos(fa) * L * .5, by + Math.sin(fa) * L * .5, L * .5, L * .2, fa, Math.PI, Math.PI * 3);
+    }
+  }
+  // 尾びれ
+  const e = pts[N - 1], q = pts[N - 3];
+  const ba = Math.atan2(e.y - pts[N - 2].y, e.x - pts[N - 2].x), ca = Math.atan2(pts[N - 2].y - q.y, pts[N - 2].x - q.x);
+  const sw = angDiff(ba, ca) * 1.6, tl = len * .27, we = len * .125 * prof(1);
+  const P2 = (a, r) => [e.x + Math.cos(ba + a + sw) * r, e.y + Math.sin(ba + a + sw) * r];
+  const nx = -Math.sin(ba), ny = Math.cos(ba);
+  const c1 = P2(.32, tl * .55), t1 = P2(.55, tl), n1 = P2(.12, tl * .82), nt = P2(0, tl * .56), n2 = P2(-.12, tl * .82), t2 = P2(-.55, tl), c2 = P2(-.32, tl * .55);
+  ctx.moveTo(e.x + nx * we, e.y + ny * we);
+  ctx.quadraticCurveTo(c1[0], c1[1], t1[0], t1[1]);
+  ctx.quadraticCurveTo(n1[0], n1[1], nt[0], nt[1]);
+  ctx.quadraticCurveTo(n2[0], n2[1], t2[0], t2[1]);
+  ctx.quadraticCurveTo(c2[0], c2[1], e.x - nx * we, e.y - ny * we);
+  ctx.closePath();
+}
+function drawKoi(ctx, pts, look, len, o = {}) {
+  const alpha = o.alpha === undefined ? 1 : o.alpha;
+  if (alpha <= 0) return;
+  ctx.save();
+  if (o.sil) {
+    ctx.fillStyle = '#26323a';
+    ctx.beginPath(); finsPath(ctx, pts, len, 0); ctx.fill(); koiPath(ctx, pts, len); ctx.fill();
+    ctx.restore(); return;
+  }
+  // 影（池の底に落ちる）
+  const sh = o.shadow || 0;
+  if (sh) {
+    ctx.save(); ctx.translate(sh * .6, sh); ctx.globalAlpha = alpha * .3; ctx.fillStyle = '#000';
+    koiPath(ctx, pts, len); ctx.fill(); ctx.beginPath(); finsPath(ctx, pts, len, o.finPh || 0); ctx.fill(); ctx.restore();
+  }
+  ctx.globalAlpha = alpha;
+  // ひれ
+  ctx.fillStyle = look.fin; ctx.globalAlpha = alpha * .58;
+  ctx.beginPath(); finsPath(ctx, pts, len, o.finPh || 0); ctx.fill();
+  ctx.globalAlpha = alpha * .22; ctx.strokeStyle = '#fff'; ctx.lineWidth = .6; ctx.stroke();
+  ctx.globalAlpha = alpha;
+  // 体
+  koiPath(ctx, pts, len); ctx.fillStyle = look.base; ctx.fill();
+  ctx.save(); koiPath(ctx, pts, len); ctx.clip();
+  if (look.net) {
+    ctx.strokeStyle = look.net; ctx.lineWidth = Math.max(.6, len * .008);
+    ctx.beginPath();
+    for (let t = .12; t < .92; t += .055) for (let oo = -.1; oo <= .1; oo += .033) {
+      const s = spinePoint(pts, t), cx = s.x - s.dy * oo * len, cy = s.y + s.dx * oo * len, rr = len * .02;
+      const a = Math.atan2(s.dy, s.dx);
+      ctx.moveTo(cx + Math.cos(a + 2.2) * rr, cy + Math.sin(a + 2.2) * rr); ctx.arc(cx, cy, rr, a + 2.2, a + 4.08);
+    }
+    ctx.stroke();
+  }
+  for (const sp of look.spots) {
+    const s = spinePoint(pts, sp.t), cx = s.x - s.dy * sp.o * len, cy = s.y + s.dx * sp.o * len;
+    ctx.fillStyle = sp.c; ctx.beginPath(); ctx.ellipse(cx, cy, sp.r * len * 1.25, sp.r * len, Math.atan2(s.dy, s.dx), 0, TAU); ctx.fill();
+  }
+  // 立体感（背の光と脇の影）
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath();
+  for (let i = 1; i < pts.length - 2; i++) i === 1 ? ctx.moveTo(pts[i].x, pts[i].y) : ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.strokeStyle = look.metal ? 'rgba(255,255,240,.55)' : 'rgba(255,255,255,.16)'; ctx.lineWidth = len * (look.metal ? .07 : .05); ctx.stroke();
+  if (look.metal) { ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = len * .025; ctx.stroke(); }
+  if (o.tint > .01) { ctx.fillStyle = rgba(P.bot, o.tint); ctx.fillRect(-1e4, -1e4, 2e4, 2e4); }
+  ctx.restore();
+  koiPath(ctx, pts, len); ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = .8; ctx.stroke();
+  // 目
+  const s = spinePoint(pts, .055), w = len * .125 * prof(.055) * .78;
+  ctx.fillStyle = 'rgba(15,12,14,.75)';
+  for (const side of [1, -1]) { ctx.beginPath(); ctx.arc(s.x - s.dy * w * side, s.y + s.dx * w * side, Math.max(.8, len * .011), 0, TAU); ctx.fill(); }
+  ctx.restore();
+}
+
+// ---------- 浮き草・花びら・落ち葉 ----------
+const MAPLE = [[-90, 1], [-38, .86], [-142, .86], [12, .56], [-192, .56]];
+function makeFloater(type, x, y) {
+  const r = Math.random();
+  const f = { type, x: x === undefined ? rand(W) : x, y: y === undefined ? rand(H) : y, vx: 0, vy: 0, rot: rand(TAU), vr: rand(-.2, .2), s: 1, a: 0, age: 0 };
+  if (type === 'petal') { f.s = rand(3.2, 5.2); f.col = r < .5 ? [246, 206, 218] : [250, 226, 232]; }
+  else { f.s = rand(6, 10); f.col = r < .45 ? [204, 64, 40] : r < .8 ? [226, 120, 46] : [220, 170, 60]; }
+  return f;
+}
+function drawFloater(f) {
+  c.save(); c.translate(f.x, f.y); c.rotate(f.rot); c.globalAlpha = f.a;
+  if (f.type === 'petal') {
+    c.fillStyle = 'rgba(0,0,0,.18)'; c.beginPath(); c.ellipse(1.5, 2.5, f.s, f.s * .62, 0, 0, TAU); c.fill();
+    c.fillStyle = rgba(f.col); c.beginPath(); c.moveTo(-f.s, 0); c.quadraticCurveTo(0, -f.s * 1.1, f.s, -f.s * .15); c.lineTo(f.s * .7, 0); c.lineTo(f.s, f.s * .15); c.quadraticCurveTo(0, f.s * 1.1, -f.s, 0); c.fill();
+  } else {
+    // もみじ：先のとがった葉が五つ、手のひらのように開く
+    const s = f.s;
+    for (const [ox, oy, col] of [[1.8, 2.8, 'rgba(0,0,0,.2)'], [0, 0, rgba(f.col)]]) {
+      c.fillStyle = col;
+      for (const [deg, k] of MAPLE) {
+        c.save(); c.translate(ox, oy + s * .12); c.rotate(deg * Math.PI / 180 - Math.PI / 2);
+        c.beginPath(); c.moveTo(0, 0); c.bezierCurveTo(s * .3 * k, s * .3 * k, s * .14 * k, s * .78 * k, 0, s * k); c.bezierCurveTo(-s * .14 * k, s * .78 * k, -s * .3 * k, s * .3 * k, 0, 0); c.fill();
+        c.restore();
+      }
+      c.beginPath(); c.arc(ox, oy + s * .12, s * .2, 0, TAU); c.fill();
+    }
+    c.strokeStyle = rgba(f.col.map(v => v * .6), .9); c.lineWidth = .8; c.beginPath(); c.moveTo(0, s * .12); c.lineTo(0, s * .62); c.stroke();
+  }
+  c.restore();
+}
+function rebuildSeason() {
+  floaters.length = 0; air.length = 0;
+  const area = clamp(W * H / (390 * 844), .6, 2.4);
+  if (seasonKey === 'spring') for (let i = 0; i < Math.round(12 * area); i++) floaters.push(Object.assign(makeFloater('petal'), { a: 1 }));
+  if (seasonKey === 'autumn') for (let i = 0; i < Math.round(7 * area); i++) floaters.push(Object.assign(makeFloater('leaf'), { a: 1 }));
+  if (seasonKey === 'summer') for (let i = 0; i < Math.round(13 * area); i++) air.push({ type: 'fly', x: rand(W), y: rand(H), vx: 0, vy: 0, ph: rand(TAU), sp: rand(.6, 1.4), z: rand(.6, 1.2) });
+  if (seasonKey === 'winter') for (let i = 0; i < Math.round(48 * area); i++) air.push(makeSnow(true));
+}
+function makeSnow(any) { return { type: 'snow', x: rand(W), y: any ? rand(H) : -10, land: rand(H * .1, H), r: rand(.9, 2.4), vx: rand(-6, 6), vy: rand(16, 34), ph: rand(TAU) }; }
+
+// ---------- 蓮 ----------
+let round = null, nextRoundAt = 0;
+function lotusColors() { return ['pink', 'white', 'yellow', 'blue', 'purple'].filter(k => k === 'pink' || unlocked(k)); }
+function newRound() {
+  pads.length = 0;
+  const cols = lotusColors(), r0 = padRadius();
+  for (let i = 0; i < 5; i++) {
+    let best = null;
+    for (let tries = 0; tries < 80; tries++) {
+      const x = rand(U * .14, W - U * .14), y = rand(H * .18, H * .76);
+      let md = 1e9; for (const p of pads) md = Math.min(md, Math.hypot(p.x - x, p.y - y));
+      if (!best || md > best.md) best = { x, y, md };
+      if (md > U * .26) break;
+    }
+    pads.push({ x: best.x, y: best.y, r: r0, rot: rand(TAU), vx: 0, vy: 0, vr: 0, energy: 0, bloom: 0, bloomed: false, col: pick(cols), appear: -i * .25, alpha: 0, scale: .6, pulse: 0, leaving: false, glowT: rand(TAU) });
+  }
+  round = { done: false, fullAt: 0, celebrated: false, leaveAt: 0 };
+  renderBuds();
+}
+function bloomPad(p) {
+  p.bloomed = true; p.pulse = 1.4;
+  S.blooms++;
+  const sc = scene(), n = scaleNotes(), base = 3 + Math.floor(p.x / W * 5);
+  if (started) { bell(n[base], { vel: .14, pan: p.x / W * 2 - 1 }); bell(n[base + 2], { vel: .11, when: .11, pan: p.x / W * 2 - 1 }); bell(n[base + 4], { vel: .09, when: .22, pan: p.x / W * 2 - 1, dur: 3.4 }); }
+  for (let i = 0; i < 6; i++) lights.push({ x: p.x + rand(-6, 6), y: p.y + rand(-6, 6), vx: rand(-8, 8), vy: rand(-26, -12), t: 0, life: rand(2, 3.4), r: rand(6, 11), col: hex(LOTUS[p.col].b) });
+  buzz('light');
+  renderBuds(true);
+  if (S.hint === 1) { S.hint = 2; showHint('五輪すべて咲かせると、新しい鯉がやってきます', 6); }
+  saveSoon();
+}
+function updatePads(dt) {
+  for (const p of pads) {
+    p.appear += dt;
+    const ap = clamp(p.appear / 1.6, 0, 1);
+    if (p.leaving) { p.alpha = Math.max(0, p.alpha - dt * .45); p.bloom = Math.max(0, p.bloom - dt * .35); }
+    else { p.alpha = easeOut(ap); }
+    p.scale = lerp(p.scale, p.leaving ? .7 : 1, 1 - Math.exp(-dt * 2));
+    const target = p.bloomed ? 1 : Math.min(.36, p.energy / BLOOM_NEED * .36);
+    if (!p.leaving) p.bloom += (target - p.bloom) * (1 - Math.exp(-dt * (p.bloomed ? 1.1 : 3)));
+    p.pulse = Math.max(0, p.pulse - dt * 1.4);
+    p.vx += (flow.x - p.vx) * dt * .05; p.vy += (flow.y - p.vy) * dt * .05;
+    // 端とほかの葉から離れる
+    const m = U * .1;
+    if (p.x < m) p.vx += (m - p.x) * dt * .8; if (p.x > W - m) p.vx -= (p.x - W + m) * dt * .8;
+    if (p.y < H * .14) p.vy += (H * .14 - p.y) * dt * .8; if (p.y > H * .8) p.vy -= (p.y - H * .8) * dt * .8;
+    for (const q of pads) { if (q === p) continue; const dx = p.x - q.x, dy = p.y - q.y, d = Math.hypot(dx, dy), lim = (p.r + q.r) * 1.15; if (d > 0 && d < lim) { p.vx += dx / d * (lim - d) * dt * 2; p.vy += dy / d * (lim - d) * dt * 2; } }
+    const damp = Math.exp(-dt * .9); p.vx *= damp; p.vy *= damp; p.vr *= Math.exp(-dt * 1.2);
+    p.x += p.vx * dt; p.y += p.vy * dt; p.rot += (p.vr + .02) * dt;
+  }
+  if (!round) return;
+  if (!round.done && pads.length && pads.every(p => p.bloomed)) { round.done = true; round.fullAt = T; }
+  if (round.done && !round.celebrated && T - round.fullAt > 1.3) { round.celebrated = true; celebrate(); round.leaveAt = T + 11; }
+  if (round.celebrated && round.leaveAt && T > round.leaveAt) { round.leaveAt = 0; for (const p of pads) p.leaving = true; nextRoundAt = T + 3; }
+  if (nextRoundAt && T > nextRoundAt) { nextRoundAt = 0; newRound(); }
+}
+function padShape(r, ox, oy) { c.beginPath(); c.moveTo(ox, oy); c.arc(ox, oy, r, .2, TAU - .2); c.closePath(); }
+function drawPad(p) {
+  if (p.alpha <= .01) return;
+  const r = p.r * p.scale;
+  c.save(); c.translate(p.x + 3, p.y + 5); c.rotate(p.rot);
+  c.globalAlpha = p.alpha * .32; c.fillStyle = '#000'; padShape(r, 0, 0); c.fill();
+  c.restore();
+  c.save(); c.translate(p.x, p.y); c.rotate(p.rot);
+  c.globalAlpha = p.alpha; c.fillStyle = rgba(P.pad); padShape(r, 0, 0); c.fill();
+  c.strokeStyle = rgba(P.padHi, .5); c.lineWidth = 1.2; c.stroke();
+  c.strokeStyle = rgba(P.padHi, .2); c.lineWidth = .8; c.beginPath();
+  for (let i = 1; i < 9; i++) { const a = .2 + i / 9 * (TAU - .4); c.moveTo(0, 0); c.lineTo(Math.cos(a) * r * .9, Math.sin(a) * r * .9); }
+  c.stroke();
+  c.restore();
+  // 花
+  const col = LOTUS[p.col], size = p.r * .95 * p.scale;
+  const fx = p.x + Math.cos(p.rot + Math.PI) * p.r * .12, fy = p.y + Math.sin(p.rot + Math.PI) * p.r * .12;
+  if (p.bloomed) drawGlow(hex(col.b), fx, fy, size * (2.6 + Math.sin(T * 1.2 + p.glowT) * .25), p.alpha * (.16 + p.pulse * .3) * (.55 + P.dark * .6));
+  if (p.pulse > 0 && !p.bloomed) drawGlow(hex(col.b), fx, fy, size * 1.6, p.pulse * .35);
+  drawFlower(fx, fy, size, p.bloom, col, p.rot * .6, p.alpha);
+}
+function petal(L, w) { c.beginPath(); c.moveTo(0, 0); c.bezierCurveTo(w, L * .28, w * .9, L * .78, 0, L); c.bezierCurveTo(-w * .9, L * .78, -w, L * .28, 0, 0); }
+function drawFlower(x, y, size, bloom, col, rot, alpha) {
+  const e1 = easeOut(clamp(bloom * 1.25, 0, 1)), e2 = easeOut(clamp(bloom * 1.3 - .25, 0, 1)), e3 = easeOut(clamp(bloom * 1.5 - .55, 0, 1));
+  c.save(); c.translate(x, y); c.rotate(rot); c.globalAlpha = alpha;
+  const layers = [[8, 0, size * (.28 + .72 * e1), size * (.13 + .17 * e1), col.c], [8, Math.PI / 8, size * (.22 + .5 * e2), size * (.12 + .14 * e2), col.b], [6, .3, size * (.16 + .3 * e3), size * (.1 + .1 * e3), col.a]];
+  for (const [n, off, L, w, fill] of layers) {
+    c.fillStyle = fill; c.strokeStyle = 'rgba(0,0,0,.12)'; c.lineWidth = .6;
+    for (let i = 0; i < n; i++) { c.save(); c.rotate(off + i / n * TAU); petal(L, w); c.fill(); c.stroke(); c.restore(); }
+  }
+  if (bloom < .55) {
+    const k = 1 - clamp(bloom / .55, 0, 1);
+    c.globalAlpha = alpha * k;
+    c.fillStyle = col.b; c.beginPath(); c.ellipse(0, 0, size * .3, size * .25, 0, 0, TAU); c.fill();
+    c.strokeStyle = 'rgba(255,255,255,.35)'; c.lineWidth = .8; c.beginPath(); c.moveTo(-size * .2, 0); c.quadraticCurveTo(0, -size * .12, size * .2, 0); c.moveTo(0, -size * .2); c.quadraticCurveTo(size * .1, 0, 0, size * .2); c.stroke();
+    c.globalAlpha = alpha;
+  }
+  if (e3 > .05) {
+    c.fillStyle = '#f2cf62'; c.beginPath(); c.arc(0, 0, size * .15 * e3, 0, TAU); c.fill();
+    c.fillStyle = 'rgba(150,120,40,.55)';
+    for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; c.beginPath(); c.arc(Math.cos(a) * size * .08 * e3, Math.sin(a) * size * .08 * e3, size * .02 * e3, 0, TAU); c.fill(); }
+  }
+  c.restore();
+}
+
+// ---------- 満開 ----------
+function rollKind() {
+  const list = KINDS.map(k => ({ k, w: ({ 1: 10, 2: 5, 3: 2 })[k.rare] * (S.seen[k.id] ? 1 : 2.5) }));
+  let sum = list.reduce((s, x) => s + x.w, 0), r = Math.random() * sum;
+  for (const x of list) { r -= x.w; if (r <= 0) return x.k.id; }
+  return 'kohaku';
+}
+function celebrate() {
+  S.fulls++;
+  flash = 1;
+  const big = $('big'); big.classList.remove('show'); void big.offsetWidth; big.classList.add('show');
+  const n = scaleNotes();
+  if (started) { [0, 2, 4, 5, 7, 9, 10, 12].forEach((k, i) => bell(n[Math.min(n.length - 1, k + 1)], { vel: .11, when: i * .26, dur: 3.6, pan: Math.sin(i) * .6 })); bell(scene().key + 12, { vel: .16, dur: 6 }); }
+  buzz('success');
+  for (const p of pads) for (let i = 0; i < 9; i++) lights.push({ x: p.x + rand(-10, 10), y: p.y + rand(-10, 10), vx: rand(-10, 10), vy: rand(-34, -14), t: -rand(0, 1.2), life: rand(3, 5), r: rand(7, 13), col: hex(LOTUS[p.col].a) });
+  const kind = rollKind(), isNew = !S.seen[kind];
+  S.seen[kind] = true;
+  setTimeout(() => {
+    if (S.koi.length < POND_MAX) {
+      const d = newKoiData(kind, 0); S.koi.push(d); koi.push(new Koi(d, { enter: true }));
+      toast(`新しい鯉がやってきました`, `${KIND[kind].name}${isNew ? '　図鑑に登録しました' : ''}`);
+    } else {
+      const d = { id: -1, kind, seed: Math.floor(Math.random() * 1e9), xp: 30 };
+      koi.push(new Koi(d, { enter: true, visitor: true, leaveAt: T + 45 }));
+      toast(`${KIND[kind].name}が池を訪れました`, isNew ? '図鑑に登録しました' : 'しばらくすると帰っていきます');
+    }
+    save();
+  }, 2400);
+  const u = UNLOCKS.find(u => u.at === S.fulls);
+  if (u) setTimeout(() => { toast(`しつらえ「${u.name}」`, u.desc); if (u.key === 'lantern') buildLanterns(); }, 6200);
+  if (S.hint === 2) S.hint = 3;
+  save();
+}
+
+// ---------- 灯籠 ----------
+function buildLanterns() {
+  lanterns.length = 0;
+  if (!unlocked('lantern') || !S.set.lantern) return;
+  for (let i = 0; i < 3; i++) lanterns.push({ x: rand(W * .15, W * .85), y: rand(H * .2, H * .75), vx: 0, vy: 0, rot: rand(TAU), ph: rand(TAU), hit: 0 });
+}
+function drawLantern(l) {
+  const a = clamp((P.dark - .3) / .5, 0, 1);
+  if (a <= .01) return;
+  const s = clamp(U * .028, 9, 16), fl = .85 + Math.sin(T * 3 + l.ph) * .08 + Math.sin(T * 7.3 + l.ph) * .05;
+  drawGlow([255, 190, 110], l.x, l.y, s * 7, a * .3 * fl);
+  c.save(); c.translate(l.x, l.y); c.rotate(l.rot); c.globalAlpha = a;
+  c.fillStyle = 'rgba(0,0,0,.25)'; c.fillRect(-s + 2, -s + 3, s * 2, s * 2);
+  c.fillStyle = `rgba(255,${200 + 30 * fl | 0},140,1)`; c.fillRect(-s, -s, s * 2, s * 2);
+  c.strokeStyle = 'rgba(70,40,20,.7)'; c.lineWidth = 1.4; c.strokeRect(-s, -s, s * 2, s * 2);
+  c.beginPath(); c.moveTo(-s, 0); c.lineTo(s, 0); c.moveTo(0, -s); c.lineTo(0, s); c.lineWidth = .7; c.stroke();
+  c.restore();
+}
+
+// ================= 入力 =================
+let started = false;
+const touches = new Map();
+function tapAt(x, y) {
+  audioStart();
+  addRipple(x, y, { power: 1 });
+  if (pellets.length >= 8) pellets.shift().alive = false;
+  pellets.push({ x, y, vx: 0, vy: 0, t: 0, alive: true });
+  bell(noteAtX(x), { vel: .2 - (x / W) * .06, pan: x / W * 1.6 - .8 });
+  buzz('light');
+  if (S.hint === 0) { S.hint = 1; showHint('波紋がつぼみに届くと、蓮がひらきます', 6); save(); }
+}
+cv.addEventListener('pointerdown', e => {
+  if (!started) return;
+  e.preventDefault();
+  try { cv.setPointerCapture(e.pointerId); } catch (_) {}
+  touches.set(e.pointerId, { x: e.clientX, y: e.clientY, lt: 0 });
+  tapAt(e.clientX, e.clientY);
+});
+cv.addEventListener('pointermove', e => {
+  const t = touches.get(e.pointerId);
+  if (!t || !started) return;
+  const d = Math.hypot(e.clientX - t.x, e.clientY - t.y);
+  if (d > Math.max(26, U * .07)) {
+    t.x = e.clientX; t.y = e.clientY;
+    addRipple(t.x, t.y, { power: .34, R: U * .2, life: 2.4, a: .8 });
+    const now = performance.now();
+    if (now - t.lt > 85) { t.lt = now; bell(noteAtX(t.x), { vel: .085, dur: 1.8, pan: t.x / W * 1.6 - .8 }); }
+  }
+});
+const endTouch = e => touches.delete(e.pointerId);
+cv.addEventListener('pointerup', endTouch); cv.addEventListener('pointercancel', endTouch);
+cv.addEventListener('contextmenu', e => e.preventDefault());
+document.addEventListener('touchend', () => { if (started) audioStart(); }, { passive: true });
+
+// ================= 更新 =================
+let nextDrop = 4, nextShishi = 30, nextFall = 2, sceneCheck = 0;
+function update(dt) {
+  T += dt;
+  stepPal(dt);
+  flow.a += dt * .02; flow.x = Math.cos(flow.a) * U * .012; flow.y = Math.sin(flow.a * .7) * U * .008;
+  flash = Math.max(0, flash - dt * .45);
+  // 景色と季節（おまかせのとき）
+  sceneCheck -= dt;
+  if (sceneCheck <= 0) {
+    sceneCheck = 20;
+    const sk = S.set.scene === 'auto' ? todNow() : S.set.scene;
+    if (sk !== sceneKey) { sceneKey = sk; PT = palOf(sk); }
+    const se = S.set.season === 'auto' ? sekkiNow().season : S.set.season;
+    if (se !== seasonKey) { seasonKey = se; rebuildSeason(); }
+    renderSekki();
+  }
+  // 波紋
+  for (let i = ripples.length - 1; i >= 0; i--) {
+    const r = ripples[i]; r.t += dt;
+    if (r.t >= r.life) { ripples.splice(i, 1); continue; }
+    const rad = r.R * easeOut(r.t / r.life);
+    const push = (o, k) => {
+      if (r.hit.has(o)) return false;
+      const dx = o.x - r.x, dy = o.y - r.y, d = Math.hypot(dx, dy);
+      if (d > rad || d > r.R) return false;
+      r.hit.add(o);
+      const f = (1 - d / r.R) * r.w * k * U, nx = d ? dx / d : 0, ny = d ? dy / d : 0;
+      o.vx += nx * f; o.vy += ny * f; return 1 - d / r.R;
+    };
+    for (const p of pads) {
+      const fall = push(p, .1);
+      if (fall !== false && r.power > 0 && !p.bloomed && !p.leaving && p.alpha > .5) {
+        p.energy += r.power * (.55 + .45 * fall); p.pulse = Math.max(p.pulse, .6 * r.power + .2); p.vr += rand(-.4, .4);
+        if (p.energy >= BLOOM_NEED) bloomPad(p);
+      }
+    }
+    for (const f of floaters) push(f, .16);
+    for (const p of pellets) push(p, .06);
+    for (const l of lanterns) push(l, .1);
+  }
+  // 餌
+  for (let i = pellets.length - 1; i >= 0; i--) {
+    const p = pellets[i]; p.t += dt;
+    if (!p.alive || p.t > 18) { p.alive = false; pellets.splice(i, 1); continue; }
+    p.vx += (flow.x - p.vx) * dt * .2; p.vy += (flow.y - p.vy) * dt * .2;
+    p.vx *= Math.exp(-dt * 1.2); p.vy *= Math.exp(-dt * 1.2);
+    p.x += p.vx * dt; p.y += p.vy * dt;
+  }
+  // 鯉
+  for (const k of koi) k.update(dt);
+  for (let i = koi.length - 1; i >= 0; i--) if (koi[i].gone) koi.splice(i, 1);
+  updatePads(dt);
+  // 浮かぶもの
+  for (const f of floaters) {
+    f.age += dt; f.a = Math.min(1, f.a + dt * .8);
+    f.vx += (flow.x * 1.5 - f.vx) * dt * .3; f.vy += (flow.y * 1.5 - f.vy) * dt * .3;
+    f.x += f.vx * dt; f.y += f.vy * dt; f.rot += f.vr * dt;
+    const m = 24; if (f.x < -m) f.x = W + m; if (f.x > W + m) f.x = -m; if (f.y < -m) f.y = H + m; if (f.y > H + m) f.y = -m;
+  }
+  for (const l of lanterns) {
+    l.vx += (flow.x - l.vx) * dt * .1; l.vy += (flow.y - l.vy) * dt * .1;
+    const m = U * .1; if (l.x < m) l.vx += 4 * dt * 10; if (l.x > W - m) l.vx -= 4 * dt * 10; if (l.y < H * .15) l.vy += 40 * dt; if (l.y > H * .8) l.vy -= 40 * dt;
+    l.vx *= Math.exp(-dt * .8); l.vy *= Math.exp(-dt * .8); l.x += l.vx * dt; l.y += l.vy * dt; l.rot += .03 * dt;
+  }
+  // 空中
+  for (let i = air.length - 1; i >= 0; i--) {
+    const a = air[i];
+    if (a.type === 'fly') {
+      a.ph += dt * a.sp; a.vx += Math.cos(a.ph * 1.3 + i) * dt * 10; a.vy += Math.sin(a.ph * .9 + i * 2) * dt * 10;
+      a.vx *= Math.exp(-dt * .6); a.vy *= Math.exp(-dt * .6); a.x += a.vx * dt; a.y += a.vy * dt;
+      if (a.x < -20) a.x = W + 20; if (a.x > W + 20) a.x = -20; if (a.y < -20) a.y = H + 20; if (a.y > H + 20) a.y = -20;
+    } else if (a.type === 'snow') {
+      a.ph += dt; a.x += (a.vx + Math.sin(a.ph * 1.4) * 8) * dt; a.y += a.vy * dt;
+      if (a.y > a.land) { if (Math.random() < .2) addRipple(a.x, a.y, { R: U * .05, life: 1.2, power: 0, a: .5 }); air[i] = makeSnow(false); }
+    } else if (a.type === 'fall') {
+      a.t += dt; a.x += (a.vx + Math.sin(a.t * 2 + a.ph) * 14) * dt; a.y += a.vy * dt; a.rot += a.vr * dt;
+      if (a.t > a.life) {
+        air.splice(i, 1);
+        addRipple(a.x, a.y, { R: U * .09, life: 1.6, power: 0, a: .6 });
+        const f = makeFloater(a.kind, a.x, a.y); f.a = 1; f.rot = a.rot; floaters.push(f);
+        const cap = a.kind === 'petal' ? 26 : 14;
+        while (floaters.length > cap) floaters.shift();
+      }
+    }
+  }
+  nextFall -= dt;
+  if (nextFall <= 0 && (seasonKey === 'spring' || seasonKey === 'autumn')) {
+    const kind = seasonKey === 'spring' ? 'petal' : 'leaf';
+    nextFall = kind === 'petal' ? rand(1.2, 3) : rand(4, 9);
+    const f = makeFloater(kind); air.push({ type: 'fall', kind, x: rand(W), y: rand(-20, H * .3), vx: rand(-10, 10), vy: rand(14, 26), t: 0, life: rand(2.5, 6), ph: rand(TAU), rot: rand(TAU), vr: rand(-1.5, 1.5), s: f.s, col: f.col });
+  } else if (nextFall <= 0) nextFall = 3;
+  // 光の粒
+  for (let i = lights.length - 1; i >= 0; i--) { const l = lights[i]; l.t += dt; if (l.t > l.life) { lights.splice(i, 1); continue; } if (l.t > 0) { l.x += (l.vx + Math.sin(l.t * 2 + i) * 6) * dt; l.y += l.vy * dt; } }
+  // 自然のしずく
+  nextDrop -= dt;
+  if (nextDrop <= 0) {
+    nextDrop = rand(5, 12);
+    const x = rand(W * .08, W * .92), y = rand(H * .12, H * .85);
+    addRipple(x, y, { power: .4, R: U * .34, life: 3.4, a: .75 });
+    if (started) plink(noteAtX(x) + 12, { vel: .05, pan: x / W * 1.4 - .7 });
+  }
+  if (started && unlocked('shishi') && S.set.shishi) {
+    nextShishi -= dt;
+    if (nextShishi <= 0) { nextShishi = rand(45, 85); shishiSound(); addRipple(W * .07, H * .9, { R: U * .3, life: 3, power: 0, a: .7 }); }
+  }
+  if (started) { audioTick(); tickTime(dt); }
+  breathUpdate(dt);
+  sleepTick();
+}
+
+// ================= 描画 =================
+function draw() {
+  // 水面
+  const g = c.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, rgba(P.top)); g.addColorStop(1, rgba(P.bot));
+  c.fillStyle = g; c.fillRect(0, 0, W, H);
+  // 月・日の映り込み
+  const gx = W * P.gx, gy = H * P.gy;
+  c.save(); c.translate(gx, gy); c.scale(1, 1.9);
+  const rg = c.createRadialGradient(0, 0, 0, 0, 0, U * .34);
+  rg.addColorStop(0, rgba(P.glow, .2 * P.ga)); rg.addColorStop(1, rgba(P.glow, 0));
+  c.fillStyle = rg; c.fillRect(-U * .4, -U * .4, U * .8, U * .8); c.restore();
+  for (let i = 0; i < 15; i++) {
+    const k = Math.pow(1 - Math.abs(i - 7) / 8, 1.4), y = gy - U * .19 + i * U * .027 + Math.sin(T * .8 + i) * 1.5;
+    const w = U * (.02 + .1 * k) * (.35 + .65 * Math.abs(Math.sin(T * .55 + i * 1.7)));
+    const x = gx + Math.sin(T * .5 + i * 2.1) * U * .02;
+    c.fillStyle = rgba(P.glow, .22 * P.ga * k); c.beginPath(); c.ellipse(x, y, w / 2, 1.1, 0, 0, TAU); c.fill();
+  }
+  // 鯉
+  for (const k of koi) k.draw(c);
+  // 波紋
+  c.lineCap = 'round';
+  for (const r of ripples) {
+    const k = r.t / r.life, rad = r.R * easeOut(k), a = Math.pow(1 - k, 1.5) * r.a;
+    if (rad < 1) continue;
+    c.strokeStyle = rgba(P.rip, a * .55); c.lineWidth = 1.5; c.beginPath(); c.arc(r.x, r.y, rad, 0, TAU); c.stroke();
+    c.strokeStyle = rgba(P.ripS, a * .28); c.lineWidth = 2.2; c.beginPath(); c.arc(r.x, r.y, rad * .9, 0, TAU); c.stroke();
+    if (rad > 18) { c.strokeStyle = rgba(P.rip, a * .22); c.lineWidth = 1; c.beginPath(); c.arc(r.x, r.y, rad * .76, 0, TAU); c.stroke(); }
+  }
+  // 餌
+  for (const p of pellets) {
+    const a = p.t > 15 ? (18 - p.t) / 3 : Math.min(1, p.t * 4), bob = Math.sin(T * 3 + p.x) * .4;
+    c.globalAlpha = a; c.fillStyle = 'rgba(0,0,0,.25)'; c.beginPath(); c.arc(p.x + 1.2, p.y + 2 + bob, 3, 0, TAU); c.fill();
+    c.fillStyle = '#d9b77c'; c.beginPath(); c.arc(p.x, p.y + bob, 2.8, 0, TAU); c.fill();
+    c.fillStyle = 'rgba(255,240,210,.7)'; c.beginPath(); c.arc(p.x - .8, p.y - .8 + bob, 1, 0, TAU); c.fill();
+    c.globalAlpha = 1;
+  }
+  for (const f of floaters) drawFloater(f);
+  for (const p of pads) drawPad(p);
+  for (const l of lanterns) drawLantern(l);
+  // 空中
+  for (const a of air) {
+    if (a.type === 'fly') {
+      const blink = Math.pow(Math.max(0, Math.sin(a.ph * 2.2)), 3) * clamp((P.dark - .2) / .6, 0, 1);
+      if (blink > .02) { drawGlow([214, 240, 140], a.x, a.y, 14 * a.z, blink * .8); c.fillStyle = `rgba(240,255,200,${blink})`; c.beginPath(); c.arc(a.x, a.y, 1.3, 0, TAU); c.fill(); }
+    } else if (a.type === 'snow') {
+      c.fillStyle = 'rgba(255,255,255,.85)'; c.beginPath(); c.arc(a.x, a.y, a.r, 0, TAU); c.fill();
+    } else if (a.type === 'fall') {
+      const k = clamp(a.t / a.life, 0, 1), sc = 1.5 - k * .5;
+      drawFloater({ type: a.kind, x: a.x - 6 * (1 - k), y: a.y - 10 * (1 - k), rot: a.rot, a: Math.min(1, a.t * 2), s: a.s * sc, col: a.col });
+    }
+  }
+  for (const l of lights) { if (l.t <= 0) continue; const k = l.t / l.life, a = Math.sin(k * Math.PI) * .9; drawGlow(l.col, l.x, l.y, l.r, a); }
+  // 霧
+  if (P.fog > .02 && fogTex) {
+    const off = (T * 6) % W;
+    c.globalAlpha = P.fog; c.drawImage(fogTex, -off, 0, W, H); c.drawImage(fogTex, W - off, 0, W, H); c.globalAlpha = 1;
+  }
+  if (flash > 0) drawGlow(P.glow, W / 2, H * .45, U * .9, flash * .25);
+  if (vignette) c.drawImage(vignette, 0, 0, W, H);
+  breathDraw();
+}
+
+// ================= 呼吸 =================
+let breath = null;
+function breathStart() {
+  const pat = BREATH[S.set.bp] || BREATH.totonou;
+  breath = { pat, total: S.set.blen * 60, el: 0, step: 0, st: 0, r: U * .14, showT: 0, ending: false };
+  document.body.classList.add('breathing');
+  $('breath').classList.add('show');
+  closeSheet();
+  phaseCue(pat.steps[0][0]);
+  breathUI();
+  requestWake();
+}
+function phaseCue(ph) {
+  const key = scene().key;
+  if (ph === 'in') bell(key + 24, { vel: .1, dur: 4 });
+  else if (ph === 'out') { bell(key + 19, { vel: .09, dur: 5 }); addRipple(W / 2, H * .45, { power: .5, R: U * .62, life: 6, a: .7 }); }
+  else bell(key + 31, { vel: .04, dur: 2.5 });
+  buzz('light');
+}
+function breathUpdate(dt) {
+  if (!breath) return;
+  const b = breath, steps = b.pat.steps;
+  if (b.ending) { b.showT -= dt; if (b.showT <= 0) breath = null; return; }
+  b.showT = Math.min(1, b.showT + dt);
+  b.el += dt; b.st += dt;
+  if (b.st >= steps[b.step][1]) {
+    b.st -= steps[b.step][1];
+    b.step = (b.step + 1) % steps.length;
+    if (b.step === 0 && b.el >= b.total) { breathFinish(true); return; }
+    phaseCue(steps[b.step][0]);
+  }
+  const [ph, len] = steps[b.step], k = easeInOut(clamp(b.st / len, 0, 1));
+  const rMin = U * .12, rMax = U * .33;
+  b.r = ph === 'in' ? lerp(rMin, rMax, k) : ph === 'out' ? lerp(rMax, rMin, k) : ph === 'hold' ? rMax : rMin;
+  breathUI();
+}
+function breathUI() {
+  if (!breath || breath.ending) return;
+  const b = breath, [ph, len] = b.pat.steps[b.step];
+  const lab = PHASE_LABEL[ph];
+  if ($('bPhase').textContent !== lab) $('bPhase').textContent = lab;
+  const cnt = String(Math.max(1, Math.ceil(len - b.st)));
+  if ($('bCount').textContent !== cnt) $('bCount').textContent = cnt;
+  const left = Math.max(0, Math.ceil(b.total - b.el)), txt = `のこり ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+  if ($('bLeft').textContent !== txt) $('bLeft').textContent = txt;
+}
+function breathDraw() {
+  if (!breath) return;
+  const b = breath, a = clamp(b.showT, 0, 1), x = W / 2, y = H * .45;
+  drawGlow(P.glow, x, y, b.r * 1.5, .12 * a);
+  c.strokeStyle = rgba([236, 230, 211], .12 * a); c.lineWidth = 1; c.setLineDash([2, 6]); c.beginPath(); c.arc(x, y, U * .33, 0, TAU); c.stroke(); c.setLineDash([]);
+  c.strokeStyle = rgba([236, 230, 211], .7 * a); c.lineWidth = 1.6; c.beginPath(); c.arc(x, y, b.r, 0, TAU); c.stroke();
+  c.fillStyle = rgba([236, 230, 211], .04 * a); c.fill();
+}
+function breathFinish(done) {
+  if (!breath || breath.ending) return;
+  const sec = Math.round(breath.el);
+  breath.ending = true; breath.showT = 1;
+  document.body.classList.remove('breathing');
+  $('breath').classList.remove('show');
+  releaseWake();
+  if (sec >= 20) { S.breaths++; S.breathSec += sec; save(); }
+  if (done) { toast('おつかれさまでした', `${Math.round(sec / 60)}分、呼吸をととのえました`); bell(scene().key + 24, { vel: .12, dur: 5 }); bell(scene().key + 31, { vel: .08, dur: 5, when: .3 }); buzz('success'); }
+}
+$('bEnd').addEventListener('click', () => breathFinish(false));
+let wake = null;
+async function requestWake() { try { if (navigator.wakeLock) wake = await navigator.wakeLock.request('screen'); } catch (e) { wake = null; } }
+function releaseWake() { try { if (wake) wake.release(); } catch (e) {} wake = null; }
+
+// ================= 時間の記録 =================
+let saveAcc = 0, saveTimer = 0;
+function saveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(save, 1500); }
+function tickTime(dt) {
+  if (document.hidden || sleeping) return;
+  const k = dayKey(); S.days[k] = (S.days[k] || 0) + dt;
+  saveAcc += dt; if (saveAcc > 15) { saveAcc = 0; save(); }
+}
+function streak() {
+  const d = new Date(); let n = 0;
+  if ((S.days[dayKey(d)] || 0) < 60) d.setDate(d.getDate() - 1);
+  while ((S.days[dayKey(d)] || 0) >= 60) { n++; d.setDate(d.getDate() - 1); }
+  return n;
+}
+
+// ================= おやすみタイマー =================
+let sleepAt = 0, sleepMin = 0, sleeping = false;
+function setSleep(min) {
+  sleepMin = min; sleepAt = min ? Date.now() + min * 60000 : 0;
+  renderSleepChip();
+}
+function sleepTick() {
+  if (sleepAt && !sleeping) {
+    if (Date.now() >= sleepAt) {
+      sleeping = true; sleepAt = 0; sleepMin = 0;
+      if (A.ready) A.master.gain.setTargetAtTime(0, A.ctx.currentTime, 5);
+      $('sleepCover').classList.add('show');
+      if (breath) breathFinish(false);
+      renderSleepChip();
+    } else if (Math.floor(T) !== Math.floor(T - .02)) renderSleepChip();
+  }
+}
+function wakeUp() {
+  if (!sleeping) return;
+  sleeping = false; $('sleepCover').classList.remove('show');
+  audioStart(); applyAudio();
+}
+$('sleepCover').addEventListener('click', wakeUp);
+function renderSleepChip() {
+  const el = $('sleepChip');
+  if (!sleepAt) { el.hidden = true; return; }
+  const m = Math.max(1, Math.ceil((sleepAt - Date.now()) / 60000));
+  el.hidden = false;
+  el.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>${m}分`;
+}
+
+// ================= 画面の部品 =================
+const ICON = {
+  lotus: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 19.5c-4.3 0-7.4-2.6-8.4-6.2 2.6-.2 4.6.8 5.8 2.3-.9-3.2-.2-6.8 2.6-9.6 2.8 2.8 3.5 6.4 2.6 9.6 1.2-1.5 3.2-2.5 5.8-2.3-1 3.6-4.1 6.2-8.4 6.2z" opacity=".95"/></svg>',
+  soundOn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z"/><path d="M15.5 9.2a4 4 0 0 1 0 5.6M18.2 6.6a7.6 7.6 0 0 1 0 10.8"/></svg>',
+  soundOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>',
+  lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg>',
+  pen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15.5 5.5l3 3L9 18H6v-3z"/><path d="M13.5 7.5l3 3"/></svg>',
+};
+function renderBuds(pop) {
+  const el = $('buds');
+  if (!round) { el.innerHTML = ''; return; }
+  if (!pop || el.children.length !== pads.length) {
+    el.innerHTML = pads.map(p => `<span class="${p.bloomed ? 'on' : ''}" style="${p.bloomed ? `color:${LOTUS[p.col].b}` : ''}">${ICON.lotus}</span>`).join('');
+  } else {
+    pads.forEach((p, i) => { const s = el.children[i]; if (p.bloomed && !s.classList.contains('on')) { s.classList.add('on'); s.style.color = LOTUS[p.col].b; } });
+  }
+  el.setAttribute('aria-label', `蓮の開花 ${pads.filter(p => p.bloomed).length} / ${pads.length}`);
+}
+function renderSekki() {
+  const s = sekkiNow();
+  $('sekki').innerHTML = `${esc(s.name)}<small>${esc(s.yomi)}</small>`;
+  $('tSekki').innerHTML = `<b>${esc(s.name)}</b><span>${esc(s.desc)}</span><em>${esc(s.yomi)}</em>`;
+}
+function renderMute() {
+  $('muteBtn').innerHTML = S.set.mute ? ICON.soundOff : ICON.soundOn;
+  $('muteBtn').setAttribute('aria-label', S.set.mute ? '音を出す' : '音を消す');
+}
+$('muteBtn').addEventListener('click', () => { S.set.mute = !S.set.mute; audioStart(); applyAudio(); renderMute(); save(); poke(); });
+
+let hintTimer = 0;
+function showHint(msg, sec) {
+  const el = $('hint'); el.textContent = msg; el.classList.add('show');
+  clearTimeout(hintTimer); if (sec) hintTimer = setTimeout(() => el.classList.remove('show'), sec * 1000);
+}
+const toastQ = []; let toastBusy = false;
+function toast(title, sub) { toastQ.push([title, sub]); if (!toastBusy) nextToast(); }
+function nextToast() {
+  const it = toastQ.shift(); if (!it) { toastBusy = false; return; }
+  toastBusy = true;
+  const el = document.createElement('div'); el.className = 'toast';
+  el.innerHTML = `<b>${esc(it[0])}</b>${it[1] ? `<span>${esc(it[1])}</span>` : ''}`;
+  $('toasts').appendChild(el);
+  setTimeout(() => { el.classList.add('out'); setTimeout(() => { el.remove(); nextToast(); }, 700); }, 3400);
+}
+
+// 操作が無いあいだは画面の部品を薄くする
+let calmTimer = 0;
+function poke() { document.body.classList.remove('calm'); clearTimeout(calmTimer); calmTimer = setTimeout(() => { if (!sheetOpen) document.body.classList.add('calm'); }, 7000); }
+$('dock').addEventListener('pointerdown', poke); $('hud').addEventListener('pointerdown', poke);
+
+// ================= シート =================
+let sheetOpen = null, renaming = 0;
+function openSheet(kind) {
+  sheetOpen = kind; poke();
+  const titles = { breath: '呼吸', zukan: '図鑑', record: '記録', settings: '設定' };
+  $('sheetTitle').textContent = titles[kind];
+  renderSheet();
+  $('sheet').classList.add('open'); $('scrim').classList.add('open'); $('sheet').setAttribute('aria-hidden', 'false');
+  $('sheetBody').scrollTop = 0;
+  setTimeout(() => $('sheetClose').focus({ preventScroll: true }), 300);
+}
+function closeSheet() {
+  if (!sheetOpen) return;
+  sheetOpen = null; resetArmed = false; renaming = 0;
+  $('sheet').classList.remove('open'); $('scrim').classList.remove('open'); $('sheet').setAttribute('aria-hidden', 'true');
+  poke();
+}
+function renderSheet() {
+  const b = $('sheetBody');
+  if (sheetOpen === 'breath') b.innerHTML = breathHTML();
+  else if (sheetOpen === 'zukan') { b.innerHTML = zukanHTML(); drawThumbs(b); }
+  else if (sheetOpen === 'record') b.innerHTML = recordHTML();
+  else if (sheetOpen === 'settings') b.innerHTML = settingsHTML();
+}
+document.querySelectorAll('[data-open]').forEach(btn => btn.addEventListener('click', () => { audioStart(); openSheet(btn.dataset.open); }));
+$('sheetClose').addEventListener('click', closeSheet);
+$('scrim').addEventListener('click', closeSheet);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { if ($('photo').classList.contains('show')) closePhoto(); else if (sheetOpen) closeSheet(); else if (breath) breathFinish(false); } });
+
+const seg = (name, cur, opts) => `<div class="seg" data-seg="${name}">${opts.map(([v, l]) => `<button aria-pressed="${String(v) === String(cur)}" data-v="${v}">${l}</button>`).join('')}</div>`;
+const sw = (key, on, label, sub) => `<div class="row"><span>${label}${sub ? `<small>${sub}</small>` : ''}</span><button class="sw" role="switch" aria-checked="${!!on}" aria-label="${label}" data-toggle="${key}"><i></i></button></div>`;
+
+function breathHTML() {
+  return `<p class="lead">池に浮かぶ輪に合わせて、ゆっくり息をします。輪が広がるときに吸い、縮むときに吐きます。</p>
+  <div class="bp" role="radiogroup" aria-label="呼吸のしかた">${Object.entries(BREATH).map(([k, v]) => `<button role="radio" aria-checked="${S.set.bp === k}" data-bp="${k}"><b>${v.name}</b><span>${v.sub}</span></button>`).join('')}</div>
+  <h3 class="sec">長さ</h3>${seg('blen', S.set.blen, [[1, '1分'], [3, '3分'], [5, '5分']])}
+  <button class="primary" data-action="breath-start">はじめる</button>
+  <p class="note">これまで ${S.breaths}回・${Math.round(S.breathSec / 60)}分</p>`;
+}
+function zukanHTML() {
+  const seenN = KINDS.filter(k => S.seen[k.id]).length;
+  const pond = S.koi.map(k => {
+    const st = stageOf(k.xp), next = STAGES[st + 1], prevAt = STAGES[st][0];
+    const pct = next ? Math.round((k.xp - prevAt) / (next[0] - prevAt) * 100) : 100;
+    const days = Math.max(1, Math.floor((Date.now() - k.born) / 864e5) + 1);
+    const nameRow = renaming === k.id
+      ? `<form class="pk-form" data-rename-form="${k.id}"><input id="rename-${k.id}" maxlength="10" value="${esc(k.name || '')}" placeholder="名前（10文字まで）" enterkeyhint="done" autocomplete="off"><button type="submit">決める</button></form>`
+      : `<div class="pk-name">${k.name ? `${esc(k.name)}<em>${KIND[k.kind].name}</em>` : KIND[k.kind].name}<small>${STAGES[st][1]}</small><button class="pk-edit" data-rename="${k.id}" aria-label="${KIND[k.kind].name}に名前を付ける">${ICON.pen}</button></div>`;
+    return `<li class="pk"><canvas data-kind="${k.kind}" data-seed="${k.seed}"></canvas><div class="pk-main">${nameRow}<div class="bar"><i style="width:${pct}%"></i></div><div class="pk-sub">${next ? `${next[1]}まで あと${next[0] - k.xp}粒` : 'りっぱな大鯉です'}・池に来て${days}日目</div></div></li>`;
+  }).join('');
+  const grid = KINDS.map((k, i) => {
+    const seen = !!S.seen[k.id];
+    return `<li class="zk ${seen ? '' : 'unseen'}" style="animation-delay:${i * 30}ms"><canvas data-kind="${k.id}" data-seed="${(i + 1) * 104729}" ${seen ? '' : 'data-sil="1"'}></canvas><div class="zk-name">${seen ? k.name : 'まだ見ぬ鯉'}<small class="rare" aria-label="${RARE_LABEL[k.rare]}">${[1, 2, 3].map(n => `<i class="${n <= k.rare ? 'on' : ''}"></i>`).join('')}</small></div>${seen ? `<p>${k.desc}</p>` : `<p>${RARE_LABEL[k.rare]}鯉。蓮を満開にすると出会えるかもしれません</p>`}</li>`;
+  }).join('');
+  return `<div class="zk-top"><b>${seenN}</b><span>/ ${KINDS.length} 種類と出会いました</span></div>
+  <h3 class="sec">いまの池<small>${S.koi.length} / ${POND_MAX} 匹</small></h3><ul class="pond-list">${pond}</ul>
+  <p class="note">鉛筆のボタンで名前を付けられます。鯉は水面に落ちた餌を食べて育ちます。池がいっぱいになると、新しい鯉は訪れて帰っていきます。</p>
+  <h3 class="sec">図鑑<small>●の数はめずらしさ</small></h3><ul class="zk-grid">${grid}</ul>`;
+}
+function drawThumbs(root) {
+  root.querySelectorAll('canvas[data-kind]').forEach(cnv => {
+    const w = cnv.clientWidth || 96, h = cnv.clientHeight || w / 2, dpr = Math.min(2, window.devicePixelRatio || 1);
+    cnv.width = Math.round(w * dpr); cnv.height = Math.round(h * dpr);
+    const x = cnv.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const len = Math.min(w * .68, h * 1.5), pts = [];
+    for (let i = 0; i < KN; i++) { const t = i / (KN - 1); pts.push({ x: w * .5 + len * .47 - t * len * .78, y: h * .5 + Math.sin(t * Math.PI * 1.15 + .3) * h * .07 }); }
+    drawKoi(x, pts, makeLook(cnv.dataset.kind, +cnv.dataset.seed), len, { shadow: 3, finPh: .6, sil: !!cnv.dataset.sil });
+  });
+}
+function recordHTML() {
+  const today = S.days[dayKey()] || 0;
+  const total = Object.values(S.days).reduce((a, b) => a + b, 0);
+  const th = Math.floor(total / 3600), tm = Math.floor(total % 3600 / 60);
+  const WD = ['日', '月', '火', '水', '木', '金', '土'];
+  const week = [];
+  for (let i = 6; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); week.push({ m: Math.floor((S.days[dayKey(d)] || 0) / 60), wd: WD[d.getDay()], today: i === 0 }); }
+  const max = Math.max(10, ...week.map(w => w.m));
+  const next = UNLOCKS.find(u => S.fulls < u.at);
+  return `<div class="stats">
+    <div class="stat"><span class="k">今日</span><span class="v">${Math.floor(today / 60)}<small>分</small></span></div>
+    <div class="stat"><span class="k">続けて</span><span class="v">${streak()}<small>日</small></span></div>
+    <div class="stat"><span class="k">これまで</span><span class="v">${th ? `${th}<small>時間</small>` : ''}${tm}<small>分</small></span></div>
+    <div class="stat"><span class="k">満開</span><span class="v">${S.fulls}<small>回</small></span></div>
+  </div>
+  <h3 class="sec">この一週間<small>池にいた時間（分）</small></h3>
+  <div class="week">${week.map((w, i) => `<div class="wk ${w.today ? 'today' : ''}"><b>${w.m || ''}</b><i style="height:${Math.max(2, w.m / max * 72)}%;animation-delay:${i * 50}ms"></i><span>${w.wd}</span></div>`).join('')}</div>
+  <p class="mini">咲かせた蓮 ${S.blooms}輪・呼吸 ${S.breaths}回・池の鯉 ${S.koi.length}匹<br>1日1分以上いると「続けて」の日数が増えます</p>
+  <h3 class="sec">池のしつらえ<small>${next ? `次は満開あと${next.at - S.fulls}回` : 'すべてそろいました'}</small></h3>
+  <ul class="unlocks">${UNLOCKS.map(u => { const got = S.fulls >= u.at; return `<li class="${got ? 'got' : ''}">${got ? ICON.lotus : ICON.lock}<div class="u"><b>${u.name}</b><span>${got ? u.desc : `満開${u.at}回で`}</span></div></li>`; }).join('')}</ul>`;
+}
+let resetArmed = false;
+function settingsHTML() {
+  const sk = sekkiNow();
+  const lockRow = (key, label, sub) => unlocked(key) ? sw(key === 'shishi' ? 'shishi' : 'lantern', key === 'shishi' ? S.set.shishi : S.set.lantern, label, sub)
+    : `<div class="row"><span>${label}<small>${sub}</small></span><span class="lock">${ICON.lock}満開${UNLOCKS.find(u => u.key === key).at}回で</span></div>`;
+  return `<h3 class="sec">音</h3>
+  ${sw('bgm', S.set.bgm, '環境音と音楽', '水の音・和音・虫の声')}
+  ${sw('sfx', S.set.sfx, '効果音', '波紋や花の音')}
+  <div class="row"><label for="vol">音量</label><input type="range" id="vol" min="0" max="1" step="0.05" value="${S.set.vol}"></div>
+  ${sw('vib', S.set.vib, '振動', '対応している端末のみ')}
+  <h3 class="sec">景色</h3>${seg('scene', S.set.scene, [['auto', 'おまかせ'], ['night', '夜'], ['dawn', '朝'], ['day', '昼'], ['dusk', '夕']])}
+  <p class="note">おまかせは、いまの時刻に合わせて変わります</p>
+  <h3 class="sec">季節</h3>${seg('season', S.set.season, [['auto', 'おまかせ'], ['spring', '春'], ['summer', '夏'], ['autumn', '秋'], ['winter', '冬']])}
+  <p class="note">おまかせは二十四節気に合わせます。いまは${sk.name}（${SEASON_NAME[sk.season]}）。春は桜の花びら、夏は蛍、秋は紅葉と虫の声、冬は雪</p>
+  <h3 class="sec">池のしつらえ</h3>
+  ${lockRow('shishi', '鹿威し', 'ときどき竹の音が響く')}
+  ${lockRow('lantern', '浮き灯籠', '夕暮れと夜に浮かぶ')}
+  ${NATIVE && CAP.LocalNotifications ? `<h3 class="sec">夜のお知らせ</h3>
+  ${sw('notify', S.set.notify, '池からのお知らせ', '季節のひとことと一緒に、毎晩お知らせします')}
+  ${S.set.notify ? seg('notifyHour', S.set.notifyHour, [[20, '20時'], [21, '21時'], [22, '22時'], [23, '23時']]) : ''}
+  <p class="note">通知はこの端末の中で予約します。外部とは通信しません</p>` : ''}
+  <h3 class="sec">おやすみタイマー</h3>${seg('sleep', sleepMin, [[0, 'なし'], [15, '15分'], [30, '30分'], [60, '60分']])}
+  <p class="note">時間がくると音が静かに消え、画面が暗くなります</p>
+  <h3 class="sec">記録</h3>
+  <button class="danger ${resetArmed ? 'armed' : ''}" data-action="reset">${resetArmed ? 'もう一度押すと消えます' : '記録をすべて消す'}</button>
+  <p class="note">鯉・図鑑・記録がすべて消えて、はじめからになります</p>
+  <p class="about">凪の池 ${VERSION}<br>通信はしません。記録はこの端末の中にだけ保存されます。<br><a href="${SUPPORT_URL}" target="_blank" rel="noopener">サポート・プライバシーポリシー</a></p>`;
+}
+$('sheetBody').addEventListener('click', e => {
+  const t = e.target.closest('[data-toggle],[data-seg] button,[data-action],[data-bp],[data-rename]');
+  if (!t) return;
+  if (t.dataset.rename) {
+    renaming = +t.dataset.rename; renderSheet();
+    const inp = $('rename-' + renaming); if (inp) { inp.focus(); inp.select(); }
+    return;
+  }
+  if (t.dataset.toggle === 'notify') { toggleNotify(); return; }
+  if (t.dataset.toggle) {
+    const k = t.dataset.toggle; S.set[k] = !S.set[k];
+    if (k === 'lantern') buildLanterns();
+    applyAudio(); save(); renderSheet(); if (S.set[k] && k === 'vib') buzz('medium');
+  } else if (t.dataset.bp) { S.set.bp = t.dataset.bp; save(); renderSheet(); }
+  else if (t.dataset.v !== undefined) {
+    const name = t.parentElement.dataset.seg, v = t.dataset.v;
+    if (name === 'blen') S.set.blen = +v;
+    else if (name === 'scene') { S.set.scene = v; sceneCheck = 0; }
+    else if (name === 'season') { S.set.season = v; sceneCheck = 0; }
+    else if (name === 'sleep') setSleep(+v);
+    else if (name === 'notifyHour') { S.set.notifyHour = +v; scheduleNotify(); }
+    save(); renderSheet();
+  } else if (t.dataset.action === 'breath-start') { audioStart(); breathStart(); }
+  else if (t.dataset.action === 'reset') {
+    if (!resetArmed) { resetArmed = true; renderSheet(); setTimeout(() => { if (resetArmed) { resetArmed = false; if (sheetOpen === 'settings') renderSheet(); } }, 4000); return; }
+    resetArmed = false; resetAll();
+  }
+});
+$('sheetBody').addEventListener('submit', e => {
+  const f = e.target.closest('[data-rename-form]');
+  if (!f) return;
+  e.preventDefault();
+  const d = S.koi.find(k => k.id === +f.dataset.renameForm), inp = f.querySelector('input');
+  renaming = 0;
+  if (d && inp) {
+    const name = inp.value.replace(/\s+/g, ' ').trim().slice(0, 10);
+    if (name) { d.name = name; toast(`「${name}」と名付けました`, KIND[d.kind].name); buzz('light'); }
+    else if (d.name) { delete d.name; toast('名前を外しました', KIND[d.kind].name); }
+    save();
+  }
+  renderSheet();
+});
+$('sheetBody').addEventListener('input', e => {
+  if (e.target.id === 'vol') { S.set.vol = +e.target.value; applyAudio(); saveSoon(); }
+});
+function resetAll() {
+  const keepSet = Object.assign({}, S.set);
+  S = fresh(); S.set = Object.assign(S.set, { bgm: keepSet.bgm, sfx: keepSet.sfx, vol: keepSet.vol, vib: keepSet.vib, mute: keepSet.mute, notify: keepSet.notify, notifyHour: keepSet.notifyHour });
+  ensureStarterKoi();
+  koi.length = 0; for (const d of S.koi) koi.push(new Koi(d));
+  lanterns.length = 0; sceneCheck = 0; newRound(); save();
+  closeSheet(); toast('はじめからになりました', '池に三匹の鯉がいます');
+}
+
+// ================= 池の写真 =================
+const MINCHO = '"Hiragino Mincho ProN","Yu Mincho","YuMincho","Noto Serif JP","Noto Serif CJK JP",serif';
+let photoCanvas = null;
+function takePhoto() {
+  audioStart();
+  // シャッターの音（短い紙の音）
+  if (A.ready) noiseHit(A.ctx.currentTime, { type: 'highpass', freq: 2500, vel: .08, dur: .07 });
+  const sh = $('shutter'); sh.classList.remove('go'); void sh.offsetWidth; sh.classList.add('go');
+  buzz('medium');
+  const OW = 1080, OH = 1350, k = document.createElement('canvas'); k.width = OW; k.height = OH;
+  const x = k.getContext('2d');
+  // 池の今の絵を、縦長（4:5）に切り抜いて敷く
+  const sw = cv.width, sh2 = cv.height, sc = Math.max(OW / sw, OH / sh2), dw = sw * sc, dh = sh2 * sc;
+  x.drawImage(cv, (OW - dw) / 2, (OH - dh) / 2, dw, dh);
+  const g = x.createLinearGradient(0, OH * .58, 0, OH);
+  g.addColorStop(0, 'rgba(4,10,14,0)'); g.addColorStop(1, 'rgba(4,10,14,.86)');
+  x.fillStyle = g; x.fillRect(0, 0, OW, OH);
+  const tg = x.createLinearGradient(0, 0, 0, OH * .22);
+  tg.addColorStop(0, 'rgba(4,10,14,.45)'); tg.addColorStop(1, 'rgba(4,10,14,0)');
+  x.fillStyle = tg; x.fillRect(0, 0, OW, OH * .22);
+  // 右上に節気を縦書き
+  const sk = sekkiNow();
+  x.fillStyle = 'rgba(236,230,211,.9)'; x.font = `500 50px ${MINCHO}`; x.textAlign = 'center'; x.textBaseline = 'middle';
+  [...sk.name].forEach((ch, i) => x.fillText(ch, OW - 84, 104 + i * 64));
+  x.fillStyle = 'rgba(236,230,211,.55)'; x.font = `22px ${MINCHO}`;
+  [...sk.yomi].forEach((ch, i) => x.fillText(ch, OW - 140, 92 + i * 30));
+  // 下に題と記録
+  x.textAlign = 'left'; x.textBaseline = 'alphabetic';
+  x.fillStyle = '#ece6d3'; x.font = `600 76px ${MINCHO}`;
+  if ('letterSpacing' in x) x.letterSpacing = '14px';
+  x.fillText('凪の池', 76, OH - 186);
+  if ('letterSpacing' in x) x.letterSpacing = '3px';
+  const d = new Date();
+  x.fillStyle = 'rgba(236,230,211,.78)'; x.font = `28px ${MINCHO}`;
+  x.fillText(`${sk.name}のころ　${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`, 80, OH - 124);
+  x.fillStyle = 'rgba(236,230,211,.6)'; x.font = `24px ${MINCHO}`;
+  const seenN = KINDS.filter(q => S.seen[q.id]).length;
+  x.fillText(`鯉 ${S.koi.length}匹　満開 ${S.fulls}回　図鑑 ${seenN}/${KINDS.length}`, 80, OH - 78);
+  if ('letterSpacing' in x) x.letterSpacing = '0px';
+  x.strokeStyle = 'rgba(236,230,211,.22)'; x.lineWidth = 2; x.strokeRect(36, 36, OW - 72, OH - 72);
+  photoCanvas = k;
+  $('photoImg').src = k.toDataURL('image/jpeg', .9);
+  $('photoNote').textContent = NATIVE ? '共有から写真に保存することもできます' : '画像を長押しすると保存できます';
+  setTimeout(() => $('photo').classList.add('show'), 260);
+}
+async function sharePhoto() {
+  if (!photoCanvas) return;
+  const name = `nagi-${dayKey()}.jpg`;
+  if (NATIVE && CAP.Filesystem && CAP.Share) {
+    try {
+      const b64 = photoCanvas.toDataURL('image/jpeg', .9).split(',')[1];
+      const r = await CAP.Filesystem.writeFile({ path: name, data: b64, directory: 'CACHE' });
+      await CAP.Share.share({ title: '凪の池', files: [r.uri], dialogTitle: '池の写真を共有' });
+      return;
+    } catch (e) { if (/cancel/i.test(String((e && e.message) || e))) return; }
+  }
+  try {
+    const blob = await new Promise(res => photoCanvas.toBlob(res, 'image/jpeg', .9));
+    const f = new File([blob], name, { type: 'image/jpeg' });
+    if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: '凪の池' }); return; }
+  } catch (e) { if (e && e.name === 'AbortError') return; }
+  toast('この画面からは共有できません', '画像を長押しして保存してください');
+}
+function closePhoto() { $('photo').classList.remove('show'); }
+$('shotBtn').addEventListener('click', () => { poke(); takePhoto(); });
+$('photoShare').addEventListener('click', sharePhoto);
+$('photoClose').addEventListener('click', closePhoto);
+$('photo').addEventListener('click', e => { if (e.target === $('photo')) closePhoto(); });
+
+// ================= 夜のお知らせ（iOS アプリ版のみ。端末の中で予約するローカル通知） =================
+const NOTIFY_LINES = {
+  spring: ['池に桜の花びらが浮かんでいます', '春の夜の池で、鯉が待っています'],
+  summer: ['池のまわりに蛍が飛んでいます', '夏の夜風に、水面がゆれています'],
+  autumn: ['池にもみじが浮かんでいます', '虫の声のする池で、ひと息つきませんか'],
+  winter: ['池に雪が舞っています', '冬の静かな池で、ひと息つきませんか'],
+};
+const NOTIFY_BASE = 7000, NOTIFY_DAYS = 14;
+async function cancelNotify() {
+  if (!(NATIVE && CAP.LocalNotifications)) return;
+  try { await CAP.LocalNotifications.cancel({ notifications: Array.from({ length: NOTIFY_DAYS }, (_, i) => ({ id: NOTIFY_BASE + i })) }); } catch (e) {}
+}
+// 先の14日分を、日ごとの節気に合わせた文面で予約しなおす（開くたびに補充される）
+async function scheduleNotify() {
+  if (!(NATIVE && CAP.LocalNotifications)) return;
+  await cancelNotify();
+  if (!S.set.notify) return;
+  const list = [], now = Date.now();
+  for (let i = 0; i < NOTIFY_DAYS + 1 && list.length < NOTIFY_DAYS; i++) {
+    const at = new Date(); at.setDate(at.getDate() + i); at.setHours(S.set.notifyHour, 0, 0, 0);
+    if (at.getTime() < now + 60000) continue;
+    const sk = sekkiNow(at), lines = NOTIFY_LINES[sk.season];
+    list.push({ id: NOTIFY_BASE + list.length, title: '凪の池', body: `${sk.name}のころ。${lines[(at.getDate() + i) % lines.length]}`, schedule: { at, allowWhileIdle: true } });
+  }
+  try { await CAP.LocalNotifications.schedule({ notifications: list }); } catch (e) {}
+}
+async function toggleNotify() {
+  if (!(NATIVE && CAP.LocalNotifications)) return;
+  if (!S.set.notify) {
+    let ok = false;
+    try { const p = await CAP.LocalNotifications.requestPermissions(); ok = p.display === 'granted'; } catch (e) {}
+    if (!ok) { toast('通知が許可されていません', 'iPhoneの「設定」→「通知」→「凪の池」で許可できます'); renderSheet(); return; }
+    S.set.notify = true; toast('毎晩お知らせします', `${S.set.notifyHour}時ごろに届きます`);
+  } else { S.set.notify = false; }
+  save(); await scheduleNotify(); renderSheet();
+}
+
+// ================= はじまり =================
+function start() {
+  if (started) return;
+  started = true;
+  audioStart();
+  $('title').classList.add('gone');
+  document.body.classList.remove('intro');
+  addRipple(W / 2, H * .5, { power: 0, R: U * .7, life: 5 });
+  bell(scene().key + 24, { vel: .14, dur: 4 }); bell(scene().key + 31, { vel: .08, dur: 4, when: .25 });
+  if (S.hint === 0) setTimeout(() => showHint('水面に、そっと触れてください'), 1400);
+  else if (S.hint === 1) setTimeout(() => showHint('波紋がつぼみに届くと、蓮がひらきます', 6), 1400);
+  poke();
+}
+$('title').addEventListener('click', start);
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { save(); if (A.ready) A.ctx.suspend().catch(() => {}); }
+  else { if (A.ready && started && !sleeping) A.ctx.resume().catch(() => {}); last = performance.now(); if (breath) requestWake(); }
+});
+window.addEventListener('pagehide', save);
+window.addEventListener('resize', () => { resize(); });
+
+document.body.classList.add('intro');
+resize();
+for (const d of S.koi) koi.push(new Koi(d));
+rebuildSeason();
+buildLanterns();
+newRound();
+renderSekki();
+renderMute();
+if (NATIVE) {
+  restoreNative();
+  if (CAP.StatusBar) { try { CAP.StatusBar.setStyle({ style: 'DARK' }); } catch (e) {} }
+  if (S.set.notify) scheduleNotify();
+}
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.05, Math.max(0, (now - last) / 1000)); last = now;
+  update(dt); draw();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// オフラインで起動できるようにする（通常のWeb公開時のみ）
+try {
+  const native = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  if (!native && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol) && !/claude/.test(location.hostname)) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  }
+} catch (e) { /* 使えない環境では何もしない */ }
+
+// テスト用の窓口
+window.__nagi = { get S() { return S; }, koi, pads, ripples, pellets, start, tapAt, celebrate, openSheet, closeSheet, takePhoto, closePhoto, breathStart, get round() { return round; } };
+})();
+</script>
+</body>
+</html>

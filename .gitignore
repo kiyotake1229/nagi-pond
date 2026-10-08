@@ -1,0 +1,10 @@
+.DS_Store
+ios-app/node_modules/
+ios-app/www/
+ios-app/ios/App/Pods/
+ios-app/ios/App/build/
+ios-app/ios/App/App/public/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+.claude/launch.json

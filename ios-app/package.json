@@ -1,0 +1,27 @@
+{
+  "name": "nagi-ios",
+  "version": "1.1.0",
+  "private": true,
+  "description": "凪の池 — 波紋と鯉のリラックスゲーム iOSアプリ (Capacitorラッパー)",
+  "scripts": {
+    "sync-web": "bash sync-web.sh",
+    "add-ios": "npm run sync-web && npx cap add ios && npx cap sync ios",
+    "sync": "npm run sync-web && npx cap sync ios",
+    "open": "npx cap open ios",
+    "icons": "npx @capacitor/assets generate --ios --iconBackgroundColor '#08151c' --iconBackgroundColorDark '#08151c' --splashBackgroundColor '#08151c' --splashBackgroundColorDark '#08151c'"
+  },
+  "dependencies": {
+    "@capacitor/core": "^7.6.9",
+    "@capacitor/filesystem": "^7.1.9",
+    "@capacitor/haptics": "^7.0.5",
+    "@capacitor/ios": "^7.6.9",
+    "@capacitor/local-notifications": "^7.0.7",
+    "@capacitor/preferences": "^7.0.4",
+    "@capacitor/share": "^7.0.4",
+    "@capacitor/status-bar": "^7.0.6"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^7.6.9"
+  }
+}
