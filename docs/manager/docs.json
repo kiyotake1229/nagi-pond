@@ -1,7 +1,7 @@
 {
   "next_no": 11,
-  "total": 9,
-  "generated_at": "2026-10-08T22:42:16.558995",
+  "total": 10,
+  "generated_at": "2026-10-08T22:47:04.841343",
   "documents": [
     {
       "no": 10,
@@ -22,6 +22,16 @@
       "filename": "20261008_NEW_0009_IOS_AppStore用スクリーンショット.md",
       "extension": "md",
       "summary": "App Store Connect に載せるスクリーンショットを、見出し入りで5場面×4サイズ作った。MAZE の撮影の仕組み（画面なしの Chrome で台紙を開いて撮る）を流用した。"
+    },
+    {
+      "no": 8,
+      "date": "2026-10-08",
+      "type": "DPL",
+      "category": "ALL",
+      "title": "GitHubPagesで公開",
+      "filename": "20261008_DPL_0008_ALL_GitHubPagesで公開.md",
+      "extension": "md",
+      "summary": "リポジトリ `kiyotake1229/nagi-pond`（公開）を作り、GitHub Pages で Web 版とサポートページを公開した。push のたびに Pages が更新され、GitHub Actions で iOS のビルド確認も走る。"
     },
     {
       "no": 7,
