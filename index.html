@@ -181,7 +181,7 @@ body.breathing .dock,body.breathing .hud .buds{opacity:0;pointer-events:none}
 .sw i{position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:var(--paper);box-shadow:0 2px 6px rgba(0,0,0,.3);transition:transform .35s var(--ease)}
 .sw[aria-checked="true"]{background:#5f8f74}
 .sw[aria-checked="true"] i{transform:translateX(20px)}
-.lock{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--paper-3);white-space:nowrap}
+.row .lock{display:flex;flex-direction:row;align-items:center;gap:6px;font-size:11px;color:var(--paper-3);white-space:nowrap}
 .lock svg{width:13px;height:13px}
 input[type=range]{-webkit-appearance:none;appearance:none;width:min(52%,220px);height:30px;background:transparent}
 input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:4px;background:rgba(236,230,211,.2)}
@@ -297,7 +297,7 @@ input{-webkit-user-select:text;user-select:text}
     <p class="title-sekki" id="tSekki"></p>
   </div>
   <button class="start" id="startBtn">水面に触れる</button>
-  <p class="title-note">音が出ます。イヤホンがおすすめです<br>マナーモードでは音が鳴らないことがあります</p>
+  <p class="title-note" id="titleNote">音が出ます。イヤホンがおすすめです</p>
 </div>
 
 <div class="scrim" id="scrim"></div>
@@ -399,7 +399,7 @@ const RARE_LABEL = { 1: 'よく見る', 2: 'ときどき', 3: 'めずらしい' 
 const STAGES = [[0, '稚魚'], [6, '若鯉'], [20, '成鯉'], [45, '大鯉']];
 const stageOf = xp => { let s = 0; for (let i = 0; i < STAGES.length; i++) if (xp >= STAGES[i][0]) s = i; return s; };
 const koiScale = xp => .5 + .62 * (1 - Math.exp(-xp / 22));
-const VERSION = '1.2.0';
+const VERSION = '1.3.0';
 const SUPPORT_URL = 'https://kiyotake1229.github.io/nagi-pond/support.html';
 const POND_MAX = 9;
 const BLOOM_NEED = 4; // つぼみが開くのに必要な波紋の量
@@ -463,7 +463,7 @@ const CAP = (window.Capacitor && window.Capacitor.Plugins) || {};
 const KEY = 'nagi.v1';
 const fresh = () => ({
   v: 1, created: Date.now(), nextId: 1, koi: [], seen: {}, blooms: 0, fulls: 0, days: {}, totalSec: 0, breaths: 0, breathSec: 0, hint: 0,
-  set: { bgm: true, sfx: true, vib: true, vol: .75, mute: false, scene: 'auto', season: 'auto', shishi: true, lantern: true, bp: 'totonou', blen: 3, notify: false, notifyHour: 21 },
+  set: { bgm: true, sfx: true, vib: true, vol: .75, mute: false, scene: 'auto', season: 'auto', shishi: true, lantern: true, bp: 'totonou', blen: 3, notify: false, notifyHour: 21, ignoreMute: false, eco: true },
 });
 const num = (v, def, min = -Infinity, max = Infinity) => { v = Number(v); return Number.isFinite(v) ? clamp(v, min, max) : def; };
 const cleanName = s => Array.from(String(s).replace(/\s+/g, ' ').trim()).slice(0, 10).join('');
@@ -472,7 +472,7 @@ function sanitize(o) {
   const d = fresh();
   if (!o || typeof o !== 'object') return d;
   const set = Object.assign(fresh().set, o.set && typeof o.set === 'object' ? o.set : {});
-  for (const k of ['bgm', 'sfx', 'vib', 'mute', 'shishi', 'lantern', 'notify']) set[k] = !!set[k];
+  for (const k of ['bgm', 'sfx', 'vib', 'mute', 'shishi', 'lantern', 'notify', 'ignoreMute', 'eco']) set[k] = !!set[k];
   set.vol = num(set.vol, .75, 0, 1);
   if (set.scene !== 'auto' && !SCENES[set.scene]) set.scene = 'auto';
   if (set.season !== 'auto' && !SEASON_NAME[set.season]) set.season = 'auto';
@@ -556,7 +556,36 @@ function impulse(ctx, sec, decay) {
   for (let ch = 0; ch < 2; ch++) { const d = buf.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay); }
   return buf;
 }
+// iPhone・iPad か（消音スイッチの設定を出すかどうかに使う。iPad は Mac と名乗ることがある）
+const IS_IOS = NATIVE || /iPhone|iPad|iPod/.test(navigator.userAgent || '') || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1 && !/Android/.test(navigator.userAgent || ''));
+let unmuteEl = null;
+// 0.5秒の無音（8kHz・8bit・モノラルの WAV）。Audio Session API の無い古い iPhone で使う
+function silentWav() {
+  const n = 4000, b = new Uint8Array(44 + n), v = new DataView(b.buffer);
+  const str = (o, t) => { for (let i = 0; i < t.length; i++) b[o + i] = t.charCodeAt(i); };
+  str(0, 'RIFF'); v.setUint32(4, 36 + n, true); str(8, 'WAVE'); str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, 8000, true); v.setUint32(28, 8000, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true); str(36, 'data'); v.setUint32(40, n, true);
+  b.fill(128, 44);
+  let bin = ''; for (let i = 0; i < b.length; i++) bin += String.fromCharCode(b[i]);
+  return 'data:audio/wav;base64,' + btoa(bin);
+}
+// iPhone の消音スイッチ（マナーモード）が入っていても音を出す。
+// 新しい iPhone は Audio Session API で「再生」の扱いにする。無い場合は、無音の音声を流し続けて同じ扱いにする
+function applySilentMode() {
+  const on = IS_IOS && S.set.ignoreMute;
+  const as = navigator.audioSession;
+  if (as && 'type' in as) { try { as.type = on ? 'playback' : 'auto'; } catch (e) {} return; }
+  if (on && !document.hidden) {
+    if (!unmuteEl) {
+      unmuteEl = document.createElement('audio');
+      unmuteEl.src = silentWav(); unmuteEl.loop = true; unmuteEl.preload = 'auto';
+      unmuteEl.setAttribute('playsinline', ''); unmuteEl.setAttribute('x-webkit-airplay', 'deny');
+    }
+    try { quiet(unmuteEl.play()); } catch (e) {}
+  } else if (unmuteEl) { try { unmuteEl.pause(); } catch (e) {} }
+}
 function audioStart() {
+  applySilentMode();
   if (A.ctx) { if (A.ctx.state !== 'running' && !sleeping) A.ctx.resume().catch(() => {}); return; }
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
@@ -1167,6 +1196,7 @@ cv.addEventListener('pointerdown', e => {
 cv.addEventListener('pointermove', e => {
   const t = touches.get(e.pointerId);
   if (!t || !started) return;
+  lastInput = performance.now();
   const d = Math.hypot(e.clientX - t.x, e.clientY - t.y);
   if (d > Math.max(26, U * .07)) {
     t.x = e.clientX; t.y = e.clientY;
@@ -1639,6 +1669,7 @@ function settingsHTML() {
   ${sw('bgm', S.set.bgm, '環境音と音楽', '水の音・和音・虫の声')}
   ${sw('sfx', S.set.sfx, '効果音', '波紋や花の音')}
   <div class="row"><label for="vol">音量</label><input type="range" id="vol" min="0" max="1" step="0.05" value="${S.set.vol}"></div>
+  ${IS_IOS ? sw('ignoreMute', S.set.ignoreMute, 'マナーモードでも鳴らす', 'iPhoneの消音スイッチが入っていても音を出します') : ''}
   ${sw('vib', S.set.vib, '振動', '対応している端末のみ')}
   <h3 class="sec">景色</h3>${seg('scene', S.set.scene, [['auto', 'おまかせ'], ['night', '夜'], ['dawn', '朝'], ['day', '昼'], ['dusk', '夕']])}
   <p class="note">おまかせは、いまの時刻に合わせて変わります</p>
@@ -1651,6 +1682,8 @@ function settingsHTML() {
   ${sw('notify', S.set.notify, '池からのお知らせ', '季節のひとことと一緒に、毎晩お知らせします')}
   ${S.set.notify ? seg('notifyHour', S.set.notifyHour, [[20, '20時'], [21, '21時'], [22, '22時'], [23, '23時']]) : ''}
   <p class="note">通知はこの端末の中で予約します。外部とは通信しません</p>` : ''}
+  <h3 class="sec">電池</h3>
+  ${sw('eco', S.set.eco, '省電力', '30秒触らないと描く回数を半分に、5分で3分の1に減らします')}
   <h3 class="sec">おやすみタイマー</h3>${seg('sleep', sleepMin, [[0, 'なし'], [15, '15分'], [30, '30分'], [60, '60分']])}
   <p class="note">時間がくると音が静かに消え、画面が暗くなります</p>
   <h3 class="sec">記録の引き継ぎ</h3>
@@ -1675,6 +1708,12 @@ $('sheetBody').addEventListener('click', e => {
   if (t.dataset.toggle) {
     const k = t.dataset.toggle; S.set[k] = !S.set[k];
     if (k === 'lantern') buildLanterns();
+    if (k === 'ignoreMute') {
+      applySilentMode();
+      // 音の扱いを変えたあとは、いったん止めて鳴らし直すと確実に切り替わる
+      if (A.ready && !sleeping) A.ctx.suspend().then(() => A.ctx.resume()).catch(() => {});
+      toast(S.set.ignoreMute ? 'マナーモード中も音が出ます' : 'マナーモードのときは音が出ません', S.set.ignoreMute ? '人の多い場所では音量にご注意ください' : '');
+    }
     applyAudio(); save(); renderSheet(); if (S.set[k] && k === 'vib') buzz('medium');
   } else if (t.dataset.bp) { S.set.bp = t.dataset.bp; save(); renderSheet(); }
   else if (t.dataset.v !== undefined) {
@@ -1878,13 +1917,14 @@ function start() {
 $('title').addEventListener('click', start);
 
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { save(); if (A.ready) A.ctx.suspend().catch(() => {}); }
+  if (document.hidden) { save(); if (A.ready) A.ctx.suspend().catch(() => {}); if (unmuteEl) { try { unmuteEl.pause(); } catch (e) {} } }
   else { if (A.ready && started && !sleeping) A.ctx.resume().catch(() => {}); last = performance.now(); if (breath) requestWake(); }
 });
 window.addEventListener('pagehide', save);
 window.addEventListener('resize', () => { resize(); });
 
 document.body.classList.add('intro');
+if (IS_IOS) $('titleNote').innerHTML = S.set.ignoreMute ? '音が出ます。イヤホンがおすすめです<br>マナーモード中も鳴る設定になっています' : '音が出ます。イヤホンがおすすめです<br>マナーモード中は、設定の「マナーモードでも鳴らす」で鳴らせます';
 resize();
 for (const d of S.koi) koi.push(new Koi(d));
 rebuildSeason();
@@ -1898,14 +1938,29 @@ if (NATIVE) {
   if (S.set.notify) scheduleNotify();
 }
 
+// ---------- 省電力: しばらく触らないと、描く回数を減らす ----------
+const ECO_AFTER = 30000, ECO_DEEP = 300000; // 30秒で毎秒30回、5分で毎秒20回
+let lastInput = performance.now(), drawCount = 0;
+document.addEventListener('pointerdown', () => { lastInput = performance.now(); }, true);
+document.addEventListener('keydown', () => { lastInput = performance.now(); }, true);
+// 次に描くまでの最短の間隔（ミリ秒）。0 なら毎コマ描く
+function frameGap(now) {
+  if (!S.set.eco) return 0;
+  // 呼吸の輪・満開の演出・写真の撮影中は、なめらかさを優先する
+  if (breath || flash > 0 || (round && round.done && !round.celebrated)) return 0;
+  const idle = now - lastInput;
+  return idle > ECO_DEEP ? 1000 / 20 : idle > ECO_AFTER ? 1000 / 30 : 0;
+}
 let last = performance.now(), frameErr = 0;
 function frame(now) {
   // 先に次の回を予約する（途中で例外が出ても池が止まらないように）
   requestAnimationFrame(frame);
+  // おやすみ中は画面が暗いので、描くのをやめて電池を使わない
+  if (sleeping) { last = now; return; }
+  const gap = frameGap(now);
+  if (gap && now - last < gap - 4) return; // 画面の書き換え（毎秒60回）の何回かに1回だけ描く
   const dt = Math.min(.05, Math.max(0, (now - last) / 1000)); last = now;
-  // おやすみ中は画面が暗いので、描くのをやめて電池を使わない（タイマーだけは確かめる）
-  if (sleeping) return;
-  try { update(dt); draw(); }
+  try { update(dt); draw(); drawCount++; }
   catch (e) { if (frameErr++ < 3) console.error(e); }
 }
 requestAnimationFrame(frame);
@@ -1922,6 +1977,7 @@ try {
 window.__nagi = {
   get S() { return S; }, koi, pads, ripples, pellets, lights, air, floaters, start, tapAt, celebrate, openSheet, closeSheet, takePhoto, closePhoto, breathStart, breathFinish,
   get round() { return round; }, get breath() { return breath; }, get sleeping() { return sleeping; }, get T() { return T; }, get gen() { return gen; },
+  get drawCount() { return drawCount; }, get unmuteEl() { return unmuteEl; }, IS_IOS, applySilentMode,
   step(dt) { update(dt); draw(); }, resize, sanitize, exportCode, parseCode, applyState, resetAll, streak, recordHTML, settingsHTML, zukanHTML, sekkiNow, scheduleNotify, setSleep, wakeUp, initNativeStore,
 };
 })();

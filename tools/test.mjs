@@ -35,7 +35,7 @@ class FakeAudioContext {
   createBuffer(ch, len) { return { getChannelData: () => new Float32Array(len) }; }
 }
 
-function makeApp({ storage: preset, native, w = 390, h = 844, prefs: prefsPreset } = {}) {
+function makeApp({ storage: preset, native, w = 390, h = 844, prefs: prefsPreset, ua = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', audioSession, platform, touch } = {}) {
   const storage = new Map(Object.entries(preset || {}));
   const clock = { now: 0, timers: [], seq: 0 };
   const rafs = [];
@@ -65,16 +65,20 @@ function makeApp({ storage: preset, native, w = 390, h = 844, prefs: prefsPreset
       fire(t, ev = {}) { for (const fn of listeners[t] || []) fn({ type: t, target: el, preventDefault() {}, ...ev }); },
       querySelector: () => null, querySelectorAll: () => [], appendChild(c) { this.children.push(c); return c; }, remove() {},
       focus() {}, select() {}, setPointerCapture() {}, closest: () => null,
+      play() { this.playing = true; return Promise.resolve(); }, pause() { this.playing = false; },
       getContext: () => ctx2d, toDataURL: () => 'data:image/jpeg;base64,AAAA', toBlob: cb => cb(new Blob(['x'])),
     };
     return el;
   };
   const els = new Map();
   const get = id => { if (!els.has(id)) els.set(id, makeEl(id)); return els.get(id); };
+  const docListeners = {};
   const document = {
     getElementById: get, createElement: tag => makeEl('', tag), querySelectorAll: () => [], querySelector: () => null,
-    body: makeEl('body', 'body'), documentElement: makeEl('html', 'html'), hidden: false, activeElement: null, addEventListener() {},
+    body: makeEl('body', 'body'), documentElement: makeEl('html', 'html'), hidden: false, activeElement: null,
+    addEventListener(t, fn) { (docListeners[t] = docListeners[t] || []).push(fn); },
   };
+  const fireDoc = (t, ev = {}) => { for (const fn of docListeners[t] || []) fn({ type: t, target: document.body, preventDefault() {}, ...ev }); };
   const localStorage = {
     getItem: k => (storage.has(k) ? storage.get(k) : null), setItem: (k, v) => storage.set(k, String(v)),
     removeItem: k => storage.delete(k), clear: () => storage.clear(),
@@ -113,7 +117,7 @@ function makeApp({ storage: preset, native, w = 390, h = 844, prefs: prefsPreset
   const errors = [];
   const ctx = {
     document, localStorage, console: { log() {}, warn() {}, error: e => errors.push(e) },
-    navigator: { vibrate: () => true },
+    navigator: { vibrate: () => true, userAgent: ua, platform: platform || (/iPhone/.test(ua) ? 'iPhone' : 'MacIntel'), maxTouchPoints: touch !== undefined ? touch : /iPhone/.test(ua) ? 5 : 0, ...(audioSession ? { audioSession } : {}) },
     location: { protocol: 'https:', hostname: 'example.test', reload() { throw new Error('再読み込みは使わない'); } },
     performance: { now: () => clock.now },
     devicePixelRatio: 2, innerWidth: w, innerHeight: h, addEventListener() {},
@@ -128,14 +132,22 @@ function makeApp({ storage: preset, native, w = 390, h = 844, prefs: prefsPreset
   // dt 秒ずつ n コマ進める（予約された処理も同じだけ時計を進める）
   const run = (sec, dt = 1 / 30, each) => { for (let i = 0, n = Math.round(sec / dt); i < n; i++) { advance(dt * 1000); N.step(dt); if (each) each(i); } };
   const flush = () => new Promise(r => globalThis.setTimeout(r, 0));
-  return { N, ctx, storage, prefs, scheduled, clock, advance, run, flush, rafs, flags, errors, get };
+  // 画面の書き換え（毎秒60回）を sec 秒ぶん起こし、実際に描いた回数を返す
+  const frames = sec => {
+    const before = N.drawCount;
+    for (let i = 0, n = Math.round(sec * 60); i < n; i++) { advance(1000 / 60); rafs[rafs.length - 1](clock.now); }
+    return N.drawCount - before;
+  };
+  return { N, ctx, document, storage, prefs, scheduled, clock, advance, run, flush, rafs, flags, errors, get, fireDoc, frames };
 }
 
 // ---- テストの進め方 ----
 const results = [];
 async function test(name, fn) {
-  try { await fn(); results.push([true, name]); }
+  const t0 = performance.now();
+  try { await fn(); results.push([true, name, '']); }
   catch (e) { results.push([false, name, e && e.message]); }
+  results[results.length - 1].push(performance.now() - t0);
 }
 function check(cond, msg) { if (!cond) throw new Error(msg); }
 const finite = v => typeof v === 'number' && Number.isFinite(v);
@@ -359,10 +371,89 @@ await test('池の写真が作れる', () => {
   check(app.get('photoImg').src.startsWith('data:image/jpeg'), '写真の画像が無い');
 });
 
+// ---- 省電力 ----
+await test('省電力: 触っているあいだは毎秒60回、30秒触らないと30回、5分で20回。触るとすぐ60回に戻る', () => {
+  const app = makeApp(); const { N } = app;
+  N.start(); app.fireDoc('pointerdown');
+  const busy = app.frames(5) / 5;
+  check(busy > 57, `触っているあいだ 毎秒${busy.toFixed(1)}回`);
+  app.advance(26000); // 画面を動かさずに時計だけ進める（テストを速くするため）
+  const idle = app.frames(10) / 10;
+  check(idle > 28 && idle < 32, `30秒触らないと 毎秒${idle.toFixed(1)}回（30回のはず）`);
+  app.advance(260000);
+  const deep = app.frames(10) / 10;
+  check(deep > 18 && deep < 22, `5分触らないと 毎秒${deep.toFixed(1)}回（20回のはず）`);
+  app.fireDoc('pointerdown');
+  const back = app.frames(3) / 3;
+  check(back > 57, `触ったあと 毎秒${back.toFixed(1)}回`);
+});
+
+await test('省電力: 設定でオフにすると、触らなくても毎秒60回のまま', () => {
+  const app = makeApp({ storage: { [KEY]: JSON.stringify({ koi: [{ kind: 'kohaku', id: 1 }], set: { eco: false } }) } });
+  app.N.start(); app.advance(40000);
+  const r = app.frames(10) / 10;
+  check(r > 57, `毎秒${r.toFixed(1)}回`);
+});
+
+await test('省電力: 呼吸の最中は、触らなくても毎秒60回（輪をなめらかに）', () => {
+  const app = makeApp(); const { N } = app;
+  N.start(); app.advance(40000);
+  N.breathStart();
+  const r = app.frames(5) / 5;
+  check(r > 57, `呼吸中に 毎秒${r.toFixed(1)}回`);
+});
+
+await test('省電力: 古いデータ（設定に省電力が無い）では、省電力がオンになる', () => {
+  const app = makeApp({ storage: { [KEY]: JSON.stringify({ koi: [{ kind: 'kohaku', id: 1 }], set: { bgm: false } }) } });
+  check(app.N.S.set.eco === true && app.N.S.set.ignoreMute === false, `省電力 ${app.N.S.set.eco}・マナーモードでも鳴らす ${app.N.S.set.ignoreMute}`);
+});
+
+// ---- マナーモードでも鳴らす ----
+const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
+await test('マナーモード: iPhone では設定に出て、オンにすると Audio Session が「再生」になる', () => {
+  const session = { type: 'auto' };
+  const app = makeApp({ ua: IPHONE, audioSession: session }); const { N } = app;
+  check(N.IS_IOS && N.settingsHTML().includes('マナーモードでも鳴らす'), '設定に出ない');
+  N.start();
+  check(session.type === 'auto', `オフなのに ${session.type}`);
+  N.S.set.ignoreMute = true; N.applySilentMode();
+  check(session.type === 'playback', `オンにしても ${session.type}`);
+  N.S.set.ignoreMute = false; N.applySilentMode();
+  check(session.type === 'auto', `オフに戻しても ${session.type}`);
+});
+
+await test('マナーモード: iPad（Mac と名乗る）は iPhone の仲間、Android は違うと見なす', () => {
+  const IPAD = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15';
+  const ANDROID = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Mobile Safari/537.36';
+  check(makeApp({ ua: IPAD, platform: 'MacIntel', touch: 5 }).N.IS_IOS, 'iPad を見分けられない');
+  check(!makeApp({ ua: IPAD, platform: 'MacIntel', touch: 0 }).N.IS_IOS, 'タッチの無い Mac を iPad と見なした');
+  // 開発用のブラウザで Android を真似したときは、Mac の上でタッチありになる
+  check(!makeApp({ ua: ANDROID, platform: 'MacIntel', touch: 5 }).N.IS_IOS, 'Android を iPhone の仲間と見なした');
+});
+
+await test('マナーモード: PC や Android では設定に出ず、音の扱いも変えない', () => {
+  const session = { type: 'auto' };
+  const app = makeApp({ audioSession: session, storage: { [KEY]: JSON.stringify({ koi: [{ kind: 'kohaku', id: 1 }], set: { ignoreMute: true } }) } });
+  app.N.start();
+  check(!app.N.IS_IOS && !app.N.settingsHTML().includes('マナーモードでも鳴らす'), '設定に出ている');
+  check(session.type === 'auto', `iPhone でないのに ${session.type}`);
+});
+
+await test('マナーモード: Audio Session の無い古い iPhone では、無音の音声を流し、見えなくなると止める', () => {
+  const app = makeApp({ ua: IPHONE, storage: { [KEY]: JSON.stringify({ koi: [{ kind: 'kohaku', id: 1 }], set: { ignoreMute: true } }) } });
+  app.N.start();
+  const el = app.N.unmuteEl;
+  check(el && el.playing && el.loop, '無音の音声が流れていない');
+  const wav = Buffer.from(el.src.split(',')[1], 'base64');
+  check(el.src.startsWith('data:audio/wav;base64,') && wav.length === 4044 && wav.toString('ascii', 0, 4) === 'RIFF' && wav.toString('ascii', 8, 12) === 'WAVE' && wav[44] === 128, '無音の WAV の形がおかしい');
+  app.document.hidden = true; app.fireDoc('visibilitychange');
+  check(!el.playing, '見えなくなっても止まらない');
+});
+
 // ---- 結果 ----
 let fail = 0;
-for (const [ok, name, msg] of results) {
-  console.log(`${ok ? '  OK ' : '  NG '} ${name}${ok ? '' : `\n       → ${msg}`}`);
+for (const [ok, name, msg, ms] of results) {
+  console.log(`${ok ? '  OK ' : '  NG '} ${name}${ms > 3000 ? `（${(ms / 1000).toFixed(1)}秒）` : ''}${ok ? '' : `\n       → ${msg}`}`);
   if (!ok) fail++;
 }
 console.log(`\n${results.length - fail} / ${results.length} 件 合格`);
