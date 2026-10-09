@@ -76,7 +76,7 @@ App Store への申請手順は **[ios-app/岩崎さんへの引き渡し手順.
     岩崎さんへの引き渡し手順.md
     screenshots/          App Store 用スクリーンショット
   docs/                   開発ドキュメント
-  .github/workflows/      iOS のビルド確認（GitHub Actions）
+  .github/workflows/      iOS のビルド確認と自動テスト（GitHub Actions）
 ```
 
 ## 修正したいとき
