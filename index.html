@@ -96,7 +96,7 @@ body.breathing .dock,body.breathing .hud .buds{opacity:0;pointer-events:none}
 /* ---------- hint / toast / big ---------- */
 .hint{position:fixed;left:50%;bottom:calc(var(--sb) + 112px);transform:translate(-50%,8px);width:max-content;max-width:calc(100% - 32px);text-align:center;font-family:var(--display);font-size:15px;letter-spacing:.16em;line-height:1.7;color:var(--paper);text-shadow:0 1px 14px rgba(0,0,0,.6);opacity:0;pointer-events:none;transition:opacity 1.2s var(--ease),transform 1.2s var(--ease);z-index:4}
 .hint.show{opacity:1;transform:translate(-50%,0)}
-.toasts{position:fixed;left:0;right:0;top:calc(var(--st) + 70px);display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;z-index:15;padding:0 16px}
+.toasts{position:fixed;left:0;right:0;top:calc(var(--st) + 70px);display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;z-index:44;padding:0 16px}
 .toast{max-width:100%;display:flex;flex-direction:column;align-items:center;gap:2px;padding:11px 20px;border-radius:18px;background:var(--sheet);border:1px solid var(--hair);box-shadow:0 10px 40px rgba(0,0,0,.35);text-align:center;animation:tin .7s var(--ease)}
 .toast b{font-family:var(--display);font-weight:500;font-size:15px;letter-spacing:.1em}
 .toast span{font-size:12px;color:var(--paper-2);letter-spacing:.06em}
@@ -193,6 +193,15 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border:0;border-radiu
 .seg button[aria-pressed="true"]{background:rgba(236,230,211,.9);color:#0c1a21}
 .danger{width:100%;padding:13px;border-radius:14px;border:1px solid rgba(232,97,60,.45);color:#f2a088;font-size:14px;letter-spacing:.1em;transition:background .3s}
 .danger.armed{background:rgba(232,97,60,.85);color:#fff}
+.xfer{display:flex;gap:8px}
+.xfer button,.xfer-go{flex:1;padding:12px 10px;border-radius:14px;border:1px solid var(--hair);background:rgba(236,230,211,.05);font-size:13px;letter-spacing:.08em;color:var(--paper);transition:background .3s,transform .3s var(--ease)}
+.xfer button:active,.xfer-go:active{transform:scale(.97)}
+.xfer button[aria-pressed="true"]{background:rgba(236,230,211,.14);border-color:rgba(236,230,211,.4)}
+.xfer-box{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.xfer-box textarea{width:100%;min-height:92px;resize:vertical;padding:10px 12px;border-radius:12px;border:1px solid rgba(236,230,211,.25);background:rgba(0,0,0,.25);color:var(--paper);font:12px/1.5 ui-monospace,Menlo,monospace;word-break:break-all;-webkit-user-select:text;user-select:text}
+.xfer-go{width:100%;flex:none;background:rgba(236,230,211,.9);color:#0c1a21;border-color:transparent;font-family:var(--display);font-size:14px;letter-spacing:.2em}
+.xfer-go.armed{background:rgba(232,97,60,.85);color:#fff}
+.xfer-msg{margin:0;font-size:12px;color:#f2a088;min-height:1em}
 .about{margin:30px 0 0;font-size:11px;line-height:1.9;color:var(--paper-3);text-align:center}
 .about a{display:inline-block;margin-top:6px;color:var(--paper-2);text-underline-offset:3px}
 
@@ -390,7 +399,7 @@ const RARE_LABEL = { 1: 'よく見る', 2: 'ときどき', 3: 'めずらしい' 
 const STAGES = [[0, '稚魚'], [6, '若鯉'], [20, '成鯉'], [45, '大鯉']];
 const stageOf = xp => { let s = 0; for (let i = 0; i < STAGES.length; i++) if (xp >= STAGES[i][0]) s = i; return s; };
 const koiScale = xp => .5 + .62 * (1 - Math.exp(-xp / 22));
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 const SUPPORT_URL = 'https://kiyotake1229.github.io/nagi-pond/support.html';
 const POND_MAX = 9;
 const BLOOM_NEED = 4; // つぼみが開くのに必要な波紋の量
@@ -453,58 +462,90 @@ const CAP = (window.Capacitor && window.Capacitor.Plugins) || {};
 // ================= 保存 =================
 const KEY = 'nagi.v1';
 const fresh = () => ({
-  v: 1, created: Date.now(), nextId: 1, koi: [], seen: {}, blooms: 0, fulls: 0, days: {}, breaths: 0, breathSec: 0, hint: 0,
+  v: 1, created: Date.now(), nextId: 1, koi: [], seen: {}, blooms: 0, fulls: 0, days: {}, totalSec: 0, breaths: 0, breathSec: 0, hint: 0,
   set: { bgm: true, sfx: true, vib: true, vol: .75, mute: false, scene: 'auto', season: 'auto', shishi: true, lantern: true, bp: 'totonou', blen: 3, notify: false, notifyHour: 21 },
 });
-function load() {
+const num = (v, def, min = -Infinity, max = Infinity) => { v = Number(v); return Number.isFinite(v) ? clamp(v, min, max) : def; };
+const cleanName = s => Array.from(String(s).replace(/\s+/g, ' ').trim()).slice(0, 10).join('');
+// 保存データを検査して、壊れた値・知らない値を直す（古い版のデータ・引き継ぎコードもここを通す）
+function sanitize(o) {
   const d = fresh();
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (raw) {
-      const o = JSON.parse(raw);
-      if (o && typeof o === 'object') {
-        Object.assign(d, o);
-        d.set = Object.assign(fresh().set, o.set || {});
-        if (!Array.isArray(d.koi)) d.koi = [];
-        d.koi = d.koi.filter(k => k && KIND[k.kind]);
-        if (!d.seen || typeof d.seen !== 'object') d.seen = {};
-        if (!d.days || typeof d.days !== 'object') d.days = {};
-      }
-    }
-  } catch (e) { /* 読めなければ初期状態で始める */ }
-  // 70日より前の記録は消す
+  if (!o || typeof o !== 'object') return d;
+  const set = Object.assign(fresh().set, o.set && typeof o.set === 'object' ? o.set : {});
+  for (const k of ['bgm', 'sfx', 'vib', 'mute', 'shishi', 'lantern', 'notify']) set[k] = !!set[k];
+  set.vol = num(set.vol, .75, 0, 1);
+  if (set.scene !== 'auto' && !SCENES[set.scene]) set.scene = 'auto';
+  if (set.season !== 'auto' && !SEASON_NAME[set.season]) set.season = 'auto';
+  if (!BREATH[set.bp]) set.bp = 'totonou';
+  set.blen = [1, 3, 5].includes(+set.blen) ? +set.blen : 3;
+  set.notifyHour = [20, 21, 22, 23].includes(+set.notifyHour) ? +set.notifyHour : 21;
+  d.set = set;
+  d.created = num(o.created, Date.now(), 0);
+  d.blooms = Math.floor(num(o.blooms, 0, 0)); d.fulls = Math.floor(num(o.fulls, 0, 0));
+  d.breaths = Math.floor(num(o.breaths, 0, 0)); d.breathSec = num(o.breathSec, 0, 0);
+  d.hint = Math.floor(num(o.hint, 0, 0, 3));
+  if (o.days && typeof o.days === 'object') for (const [k, v] of Object.entries(o.days)) { const sec = num(v, 0, 0, 86400); if (/^\d{4}-\d{2}-\d{2}$/.test(k) && sec > 0) d.days[k] = sec; }
+  // これまでの合計は日ごとの記録とは別に持つ（日ごとの記録は70日で消すため）。古いデータは日ごとの合計から始める
+  d.totalSec = num(o.totalSec, Object.values(d.days).reduce((a, b) => a + b, 0), 0);
+  if (o.seen && typeof o.seen === 'object') for (const k of Object.keys(o.seen)) if (KIND[k] && o.seen[k]) d.seen[k] = true;
+  const used = new Set(); let maxId = 0;
+  if (Array.isArray(o.koi)) for (const k of o.koi) {
+    if (!k || typeof k !== 'object' || !KIND[k.kind]) continue;
+    const q = { id: Math.floor(num(k.id, 0, 0)), kind: k.kind, seed: Math.floor(num(k.seed, Math.random() * 1e9, 0, 4e9)), xp: Math.floor(num(k.xp, 0, 0, 1e6)), born: num(k.born, Date.now(), 0, Date.now()) };
+    if (!q.id || used.has(q.id)) q.id = 0;
+    if (typeof k.name === 'string') { const nm = cleanName(k.name); if (nm) q.name = nm; }
+    if (q.id) { used.add(q.id); maxId = Math.max(maxId, q.id); }
+    d.koi.push(q); d.seen[q.kind] = true;
+    if (d.koi.length >= POND_MAX) break;
+  }
+  for (const q of d.koi) if (!q.id) q.id = ++maxId;
+  d.nextId = Math.max(Math.floor(num(o.nextId, 1, 1)), maxId + 1);
+  // 70日より前の日ごとの記録は消す
   const lim = new Date(); lim.setDate(lim.getDate() - 70);
   const limKey = dayKey(lim);
   for (const k of Object.keys(d.days)) if (k < limKey) delete d.days[k];
   return d;
 }
+let hadLocal = false;
+function load() {
+  let o = null;
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) { o = JSON.parse(raw); hadLocal = !!(o && typeof o === 'object'); }
+  } catch (e) { o = null; /* 読めなければ初期状態で始める */ }
+  return sanitize(o);
+}
 let S = load();
-let nativeSaveT = 0;
+// iOS アプリ版は、端末のアプリ用の保存領域（Preferences）にも書く。WebView の保存領域が消えたときの備え。
+// 起動時に控えを確かめ終わるまでは書かない（確かめる前に書くと、控えを初期状態で上書きしてしまう）
+let nativeReady = false, nativeSaveT = 0;
+const quiet = p => { try { Promise.resolve(p).catch(() => {}); } catch (e) {} };
 function save() {
   const json = JSON.stringify(S);
   try { localStorage.setItem(KEY, json); } catch (e) { /* 保存できない環境でも遊べる */ }
-  // iOS アプリ版は端末のアプリ用の保存領域にも書く（WebView の保存領域が消えたときの備え）
-  if (NATIVE && CAP.Preferences) { clearTimeout(nativeSaveT); nativeSaveT = setTimeout(() => { try { CAP.Preferences.set({ key: KEY, value: json }); } catch (e) {} }, 400); }
+  if (NATIVE && nativeReady && CAP.Preferences) { clearTimeout(nativeSaveT); nativeSaveT = setTimeout(() => { try { quiet(CAP.Preferences.set({ key: KEY, value: json })); } catch (e) {} }, 400); }
 }
-// アプリ版で WebView 側の保存が消えていたら、アプリ用の保存領域から戻す
-async function restoreNative() {
+// アプリ版の起動時: WebView 側に記録が無く、アプリ用の保存領域に控えがあれば、それを戻す
+async function initNativeStore() {
   if (!(NATIVE && CAP.Preferences)) return;
-  try {
-    let has = false; try { has = !!localStorage.getItem(KEY); } catch (e) {}
-    if (has) return;
-    const r = await CAP.Preferences.get({ key: KEY });
-    if (r && r.value) { localStorage.setItem(KEY, r.value); location.reload(); }
-  } catch (e) {}
+  if (!hadLocal) {
+    try {
+      const r = await CAP.Preferences.get({ key: KEY });
+      const o = r && r.value ? JSON.parse(r.value) : null;
+      if (o && typeof o === 'object' && Array.isArray(o.koi)) { nativeReady = true; applyState(sanitize(o)); return; }
+    } catch (e) {}
+  }
+  nativeReady = true; save();
 }
 const koiLabel = d => d.name ? d.name : KIND[d.kind].name;
-function newKoiData(kind, xp = 0) { const k = { id: S.nextId++, kind, seed: Math.floor(Math.random() * 1e9), xp, born: Date.now() }; return k; }
-function ensureStarterKoi() {
-  if (S.koi.length) return;
-  S.koi.push(newKoiData('kohaku', 9), newKoiData('sanke', 4), newKoiData('chagoi', 14));
-  for (const k of S.koi) S.seen[k.kind] = true;
-  save();
+function newKoiData(kind, xp = 0, st = S) { return { id: st.nextId++, kind, seed: Math.floor(Math.random() * 1e9), xp, born: Date.now() }; }
+function addStarterKoi(st) {
+  if (st.koi.length) return;
+  st.koi.push(newKoiData('kohaku', 9, st), newKoiData('sanke', 4, st), newKoiData('chagoi', 14, st));
+  for (const k of st.koi) st.seen[k.kind] = true;
 }
-ensureStarterKoi();
+addStarterKoi(S);
+save();
 const unlocked = key => { const u = UNLOCKS.find(u => u.key === key); return !!u && S.fulls >= u.at; };
 
 // ================= 音 =================
@@ -636,7 +677,7 @@ function buzz(kind = 'light') {
   if (!S.set.vib) return;
   const H = NATIVE && CAP.Haptics;
   try {
-    if (H) { kind === 'success' ? H.notification({ type: 'SUCCESS' }) : H.impact({ style: kind === 'medium' ? 'MEDIUM' : 'LIGHT' }); return; }
+    if (H) { quiet(kind === 'success' ? H.notification({ type: 'SUCCESS' }) : H.impact({ style: kind === 'medium' ? 'MEDIUM' : 'LIGHT' })); return; }
     if (navigator.vibrate) navigator.vibrate(kind === 'success' ? [14, 70, 22] : kind === 'medium' ? 16 : 7);
   } catch (e) { /* 振動できない端末 */ }
 }
@@ -672,17 +713,18 @@ function drawGlow(col, x, y, r, a) {
   c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1;
 }
 function resize() {
-  W = window.innerWidth; H = window.innerHeight; U = Math.min(W, H);
+  // 起動直後などに大きさが0になると、描画で例外が出て池が止まるため、最低1にする
+  W = Math.max(1, window.innerWidth || 0); H = Math.max(1, window.innerHeight || 0); U = Math.min(W, H);
   DPR = Math.min(2, window.devicePixelRatio || 1);
   if (W * H * DPR * DPR > 3.6e6) DPR = Math.sqrt(3.6e6 / (W * H));
-  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  cv.width = Math.max(1, Math.round(W * DPR)); cv.height = Math.max(1, Math.round(H * DPR));
   c.setTransform(DPR, 0, 0, DPR, 0, 0);
   baseLen = clamp(U * .29, 72, 150);
   // 四隅を暗くする
-  vignette = document.createElement('canvas'); vignette.width = Math.ceil(W / 2); vignette.height = Math.ceil(H / 2);
+  vignette = document.createElement('canvas'); vignette.width = Math.max(1, Math.ceil(W / 2)); vignette.height = Math.max(1, Math.ceil(H / 2));
   { const g = vignette.getContext('2d'), w = vignette.width, h = vignette.height, gr = g.createRadialGradient(w / 2, h * .46, Math.min(w, h) * .3, w / 2, h / 2, Math.hypot(w, h) * .62); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,.5)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); }
   // 朝霧の帯
-  fogTex = document.createElement('canvas'); fogTex.width = Math.ceil(W / 3); fogTex.height = Math.ceil(H / 3);
+  fogTex = document.createElement('canvas'); fogTex.width = Math.max(1, Math.ceil(W / 3)); fogTex.height = Math.max(1, Math.ceil(H / 3));
   { const g = fogTex.getContext('2d'), w = fogTex.width, h = fogTex.height, r = mulberry(42);
     // 横に並べても継ぎ目が出ないよう、同じ霧を左右にも描く
     for (let i = 0; i < 14; i++) {
@@ -1049,6 +1091,7 @@ function drawFlower(x, y, size, bloom, col, rot, alpha) {
 }
 
 // ---------- 満開 ----------
+let gen = 0; // 池をまるごと入れ替えるたびに増やす（入れ替える前に予約した処理を止めるため）
 function rollKind() {
   const list = KINDS.map(k => ({ k, w: ({ 1: 10, 2: 5, 3: 2 })[k.rare] * (S.seen[k.id] ? 1 : 2.5) }));
   let sum = list.reduce((s, x) => s + x.w, 0), r = Math.random() * sum;
@@ -1063,9 +1106,10 @@ function celebrate() {
   if (started) { [0, 2, 4, 5, 7, 9, 10, 12].forEach((k, i) => bell(n[Math.min(n.length - 1, k + 1)], { vel: .11, when: i * .26, dur: 3.6, pan: Math.sin(i) * .6 })); bell(scene().key + 12, { vel: .16, dur: 6 }); }
   buzz('success');
   for (const p of pads) for (let i = 0; i < 9; i++) lights.push({ x: p.x + rand(-10, 10), y: p.y + rand(-10, 10), vx: rand(-10, 10), vy: rand(-34, -14), t: -rand(0, 1.2), life: rand(3, 5), r: rand(7, 13), col: hex(LOTUS[p.col].a) });
-  const kind = rollKind(), isNew = !S.seen[kind];
+  const kind = rollKind(), isNew = !S.seen[kind], g = gen;
   S.seen[kind] = true;
   setTimeout(() => {
+    if (g !== gen) return;
     if (S.koi.length < POND_MAX) {
       const d = newKoiData(kind, 0); S.koi.push(d); koi.push(new Koi(d, { enter: true }));
       toast(`新しい鯉がやってきました`, `${KIND[kind].name}${isNew ? '　図鑑に登録しました' : ''}`);
@@ -1077,7 +1121,7 @@ function celebrate() {
     save();
   }, 2400);
   const u = UNLOCKS.find(u => u.at === S.fulls);
-  if (u) setTimeout(() => { toast(`しつらえ「${u.name}」`, u.desc); if (u.key === 'lantern') buildLanterns(); }, 6200);
+  if (u) setTimeout(() => { if (g !== gen) return; toast(`しつらえ「${u.name}」`, u.desc); if (u.key === 'lantern') buildLanterns(); }, 6200);
   if (S.hint === 2) S.hint = 3;
   save();
 }
@@ -1235,7 +1279,7 @@ function update(dt) {
   if (nextDrop <= 0) {
     nextDrop = rand(5, 12);
     const x = rand(W * .08, W * .92), y = rand(H * .12, H * .85);
-    addRipple(x, y, { power: .4, R: U * .34, life: 3.4, a: .75 });
+    addRipple(x, y, { power: started && !breath ? .4 : 0, R: U * .34, life: 3.4, a: .75 });
     if (started) plink(noteAtX(x) + 12, { vel: .05, pan: x / W * 1.4 - .7 });
   }
   if (started && unlocked('shishi') && S.set.shishi) {
@@ -1325,7 +1369,7 @@ function breathStart() {
 function phaseCue(ph) {
   const key = scene().key;
   if (ph === 'in') bell(key + 24, { vel: .1, dur: 4 });
-  else if (ph === 'out') { bell(key + 19, { vel: .09, dur: 5 }); addRipple(W / 2, H * .45, { power: .5, R: U * .62, life: 6, a: .7 }); }
+  else if (ph === 'out') { bell(key + 19, { vel: .09, dur: 5 }); addRipple(W / 2, H * .45, { power: 0, R: U * .62, life: 6, a: .7 }); }
   else bell(key + 31, { vel: .04, dur: 2.5 });
   buzz('light');
 }
@@ -1384,7 +1428,7 @@ let saveAcc = 0, saveTimer = 0;
 function saveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(save, 1500); }
 function tickTime(dt) {
   if (document.hidden || sleeping) return;
-  const k = dayKey(); S.days[k] = (S.days[k] || 0) + dt;
+  const k = dayKey(); S.days[k] = (S.days[k] || 0) + dt; S.totalSec += dt;
   saveAcc += dt; if (saveAcc > 15) { saveAcc = 0; save(); }
 }
 function streak() {
@@ -1488,7 +1532,7 @@ function openSheet(kind) {
 }
 function closeSheet() {
   if (!sheetOpen) return;
-  sheetOpen = null; resetArmed = false; renaming = 0;
+  sheetOpen = null; resetArmed = false; renaming = 0; xfer = ''; pendingImport = null;
   $('sheet').classList.remove('open'); $('scrim').classList.remove('open'); $('sheet').setAttribute('aria-hidden', 'true');
   poke();
 }
@@ -1546,7 +1590,7 @@ function drawThumbs(root) {
 }
 function recordHTML() {
   const today = S.days[dayKey()] || 0;
-  const total = Object.values(S.days).reduce((a, b) => a + b, 0);
+  const total = S.totalSec;
   const th = Math.floor(total / 3600), tm = Math.floor(total % 3600 / 60);
   const WD = ['日', '月', '火', '水', '木', '金', '土'];
   const week = [];
@@ -1565,7 +1609,28 @@ function recordHTML() {
   <h3 class="sec">池のしつらえ<small>${next ? `次は満開あと${next.at - S.fulls}回` : 'すべてそろいました'}</small></h3>
   <ul class="unlocks">${UNLOCKS.map(u => { const got = S.fulls >= u.at; return `<li class="${got ? 'got' : ''}">${got ? ICON.lotus : ICON.lock}<div class="u"><b>${u.name}</b><span>${got ? u.desc : `満開${u.at}回で`}</span></div></li>`; }).join('')}</ul>`;
 }
-let resetArmed = false;
+let resetArmed = false, xfer = '', pendingImport = null;
+// ---------- 記録の引き継ぎ（コードにして別の端末へ） ----------
+const XFER_PREFIX = 'NAGI1.';
+function exportCode() {
+  const o = JSON.parse(JSON.stringify(S));
+  delete o.set.notify; delete o.set.notifyHour; // 通知はその端末ごとの許可なので移さない
+  const bytes = new TextEncoder().encode(JSON.stringify(o));
+  let bin = ''; for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+  return XFER_PREFIX + btoa(bin);
+}
+function parseCode(text) {
+  const t = String(text || '').replace(/\s+/g, '');
+  if (!t) return { err: 'コードを貼り付けてください' };
+  if (!t.startsWith(XFER_PREFIX)) return { err: '凪の池の引き継ぎコードではないようです' };
+  try {
+    const bin = atob(t.slice(XFER_PREFIX.length)), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const o = JSON.parse(new TextDecoder().decode(bytes));
+    if (!o || typeof o !== 'object' || !Array.isArray(o.koi)) throw new Error('shape');
+    return { state: sanitize(o) };
+  } catch (e) { return { err: 'コードが途中で切れているか、壊れています。最初から最後までコピーしてください' }; }
+}
 function settingsHTML() {
   const sk = sekkiNow();
   const lockRow = (key, label, sub) => unlocked(key) ? sw(key === 'shishi' ? 'shishi' : 'lantern', key === 'shishi' ? S.set.shishi : S.set.lantern, label, sub)
@@ -1588,6 +1653,11 @@ function settingsHTML() {
   <p class="note">通知はこの端末の中で予約します。外部とは通信しません</p>` : ''}
   <h3 class="sec">おやすみタイマー</h3>${seg('sleep', sleepMin, [[0, 'なし'], [15, '15分'], [30, '30分'], [60, '60分']])}
   <p class="note">時間がくると音が静かに消え、画面が暗くなります</p>
+  <h3 class="sec">記録の引き継ぎ</h3>
+  <p class="note" style="margin-top:0">別の端末や、ブラウザ版からアプリ版へ、池をそのまま移せます。コードには鯉・図鑑・記録が入ります</p>
+  <div class="xfer"><button data-action="xfer-out" aria-pressed="${xfer === 'out'}">コードを作る</button><button data-action="xfer-in" aria-pressed="${xfer === 'in'}">コードから戻す</button></div>
+  ${xfer === 'out' ? `<div class="xfer-box"><textarea id="xferOut" readonly aria-label="引き継ぎコード">${exportCode()}</textarea><button class="xfer-go" data-action="xfer-copy">コピーする</button><p class="note" style="margin:0">このコードを、移したい先の「コードから戻す」に貼り付けます</p></div>` : ''}
+  ${xfer === 'in' ? `<div class="xfer-box"><textarea id="xferIn" aria-label="引き継ぎコードを貼り付ける" placeholder="ここに引き継ぎコードを貼り付けます" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea><button class="xfer-go" data-action="xfer-apply">戻す</button><p class="xfer-msg" id="xferMsg" aria-live="polite"></p></div>` : ''}
   <h3 class="sec">記録</h3>
   <button class="danger ${resetArmed ? 'armed' : ''}" data-action="reset">${resetArmed ? 'もう一度押すと消えます' : '記録をすべて消す'}</button>
   <p class="note">鯉・図鑑・記録がすべて消えて、はじめからになります</p>
@@ -1616,6 +1686,29 @@ $('sheetBody').addEventListener('click', e => {
     else if (name === 'notifyHour') { S.set.notifyHour = +v; scheduleNotify(); }
     save(); renderSheet();
   } else if (t.dataset.action === 'breath-start') { audioStart(); breathStart(); }
+  else if (t.dataset.action === 'xfer-out' || t.dataset.action === 'xfer-in') {
+    const v = t.dataset.action === 'xfer-out' ? 'out' : 'in';
+    xfer = xfer === v ? '' : v; pendingImport = null; renderSheet();
+    if (xfer === 'in') { const ta = $('xferIn'); if (ta) ta.focus({ preventScroll: true }); }
+  } else if (t.dataset.action === 'xfer-copy') {
+    const ta = $('xferOut'), code = ta ? ta.value : exportCode();
+    const fallback = () => { if (ta) { ta.focus(); ta.select(); } toast('コードを選びました', 'そのままコピーしてください（スマホは長押し）'); };
+    try { navigator.clipboard.writeText(code).then(() => toast('コピーしました', '移したい先の「コードから戻す」に貼り付けます'), fallback); } catch (e) { fallback(); }
+  } else if (t.dataset.action === 'xfer-apply') {
+    const msg = $('xferMsg');
+    if (!pendingImport) {
+      const r = parseCode($('xferIn') && $('xferIn').value);
+      if (r.err) { if (msg) msg.textContent = r.err; return; }
+      pendingImport = r.state;
+      t.classList.add('armed'); t.textContent = 'もう一度押すと、今の池と置き換わります';
+      if (msg) msg.textContent = `鯉${pendingImport.koi.length}匹・満開${pendingImport.fulls}回の池です`;
+      return;
+    }
+    const ns = pendingImport; pendingImport = null; xfer = '';
+    Object.assign(ns.set, { notify: S.set.notify, notifyHour: S.set.notifyHour });
+    applyState(ns);
+    closeSheet(); toast('池を引き継ぎました', `鯉${S.koi.length}匹・図鑑${KINDS.filter(k => S.seen[k.id]).length}種`);
+  }
   else if (t.dataset.action === 'reset') {
     if (!resetArmed) { resetArmed = true; renderSheet(); setTimeout(() => { if (resetArmed) { resetArmed = false; if (sheetOpen === 'settings') renderSheet(); } }, 4000); return; }
     resetArmed = false; resetAll();
@@ -1628,7 +1721,7 @@ $('sheetBody').addEventListener('submit', e => {
   const d = S.koi.find(k => k.id === +f.dataset.renameForm), inp = f.querySelector('input');
   renaming = 0;
   if (d && inp) {
-    const name = inp.value.replace(/\s+/g, ' ').trim().slice(0, 10);
+    const name = cleanName(inp.value);
     if (name) { d.name = name; toast(`「${name}」と名付けました`, KIND[d.kind].name); buzz('light'); }
     else if (d.name) { delete d.name; toast('名前を外しました', KIND[d.kind].name); }
     save();
@@ -1637,13 +1730,26 @@ $('sheetBody').addEventListener('submit', e => {
 });
 $('sheetBody').addEventListener('input', e => {
   if (e.target.id === 'vol') { S.set.vol = +e.target.value; applyAudio(); saveSoon(); }
+  if (e.target.id === 'xferIn' && pendingImport) {
+    pendingImport = null;
+    const b = $('sheetBody').querySelector('[data-action="xfer-apply"]'); if (b) { b.classList.remove('armed'); b.textContent = '戻す'; }
+    const m = $('xferMsg'); if (m) m.textContent = '';
+  }
 });
-function resetAll() {
-  const keepSet = Object.assign({}, S.set);
-  S = fresh(); S.set = Object.assign(S.set, { bgm: keepSet.bgm, sfx: keepSet.sfx, vol: keepSet.vol, vib: keepSet.vib, mute: keepSet.mute, notify: keepSet.notify, notifyHour: keepSet.notifyHour });
-  ensureStarterKoi();
+// 池の中身をまるごと入れ替える
+function applyState(ns) {
+  gen++;
+  S = ns;
   koi.length = 0; for (const d of S.koi) koi.push(new Koi(d));
-  lanterns.length = 0; sceneCheck = 0; newRound(); save();
+  pellets.length = 0; lanterns.length = 0; buildLanterns();
+  nextRoundAt = 0; sceneCheck = 0; newRound();
+  renderMute(); applyAudio(); save();
+}
+function resetAll() {
+  const keep = S.set, ns = fresh();
+  Object.assign(ns.set, { bgm: keep.bgm, sfx: keep.sfx, vol: keep.vol, vib: keep.vib, mute: keep.mute, notify: keep.notify, notifyHour: keep.notifyHour });
+  addStarterKoi(ns);
+  applyState(ns);
   closeSheet(); toast('はじめからになりました', '池に三匹の鯉がいます');
 }
 
@@ -1656,6 +1762,11 @@ function takePhoto() {
   if (A.ready) noiseHit(A.ctx.currentTime, { type: 'highpass', freq: 2500, vel: .08, dur: .07 });
   const sh = $('shutter'); sh.classList.remove('go'); void sh.offsetWidth; sh.classList.add('go');
   buzz('medium');
+  try { buildPhoto(); } catch (e) { toast('写真を作れませんでした', 'もう一度お試しください'); return; }
+  $('photoNote').textContent = NATIVE ? '共有から写真に保存することもできます' : '画像を長押しすると保存できます';
+  setTimeout(() => $('photo').classList.add('show'), 260);
+}
+function buildPhoto() {
   const OW = 1080, OH = 1350, k = document.createElement('canvas'); k.width = OW; k.height = OH;
   const x = k.getContext('2d');
   // 池の今の絵を、縦長（4:5）に切り抜いて敷く
@@ -1687,10 +1798,8 @@ function takePhoto() {
   x.fillText(`鯉 ${S.koi.length}匹　満開 ${S.fulls}回　図鑑 ${seenN}/${KINDS.length}`, 80, OH - 78);
   if ('letterSpacing' in x) x.letterSpacing = '0px';
   x.strokeStyle = 'rgba(236,230,211,.22)'; x.lineWidth = 2; x.strokeRect(36, 36, OW - 72, OH - 72);
-  photoCanvas = k;
   $('photoImg').src = k.toDataURL('image/jpeg', .9);
-  $('photoNote').textContent = NATIVE ? '共有から写真に保存することもできます' : '画像を長押しすると保存できます';
-  setTimeout(() => $('photo').classList.add('show'), 260);
+  photoCanvas = k;
 }
 async function sharePhoto() {
   if (!photoCanvas) return;
@@ -1784,16 +1893,20 @@ newRound();
 renderSekki();
 renderMute();
 if (NATIVE) {
-  restoreNative();
-  if (CAP.StatusBar) { try { CAP.StatusBar.setStyle({ style: 'DARK' }); } catch (e) {} }
+  initNativeStore();
+  if (CAP.StatusBar) { try { quiet(CAP.StatusBar.setStyle({ style: 'DARK' })); } catch (e) {} }
   if (S.set.notify) scheduleNotify();
 }
 
-let last = performance.now();
+let last = performance.now(), frameErr = 0;
 function frame(now) {
-  const dt = Math.min(.05, Math.max(0, (now - last) / 1000)); last = now;
-  update(dt); draw();
+  // 先に次の回を予約する（途中で例外が出ても池が止まらないように）
   requestAnimationFrame(frame);
+  const dt = Math.min(.05, Math.max(0, (now - last) / 1000)); last = now;
+  // おやすみ中は画面が暗いので、描くのをやめて電池を使わない（タイマーだけは確かめる）
+  if (sleeping) return;
+  try { update(dt); draw(); }
+  catch (e) { if (frameErr++ < 3) console.error(e); }
 }
 requestAnimationFrame(frame);
 
@@ -1806,7 +1919,11 @@ try {
 } catch (e) { /* 使えない環境では何もしない */ }
 
 // テスト用の窓口
-window.__nagi = { get S() { return S; }, koi, pads, ripples, pellets, start, tapAt, celebrate, openSheet, closeSheet, takePhoto, closePhoto, breathStart, get round() { return round; } };
+window.__nagi = {
+  get S() { return S; }, koi, pads, ripples, pellets, lights, air, floaters, start, tapAt, celebrate, openSheet, closeSheet, takePhoto, closePhoto, breathStart, breathFinish,
+  get round() { return round; }, get breath() { return breath; }, get sleeping() { return sleeping; }, get T() { return T; }, get gen() { return gen; },
+  step(dt) { update(dt); draw(); }, resize, sanitize, exportCode, parseCode, applyState, resetAll, streak, recordHTML, settingsHTML, zukanHTML, sekkiNow, scheduleNotify, setSleep, wakeUp, initNativeStore,
+};
 })();
 </script>
 </body>

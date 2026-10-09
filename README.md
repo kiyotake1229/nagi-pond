@@ -4,12 +4,13 @@
 
 | 項目 | 内容 |
 |---|---|
-| 状態 | **Web版 1.1.0 公開中**。PWA対応済み。**iOS プロジェクト構築済み**（GitHub Actions でビルド確認。Xcode 環境で署名して申請するだけ） |
+| 状態 | **Web版 1.2.0 公開中**。PWA対応済み。**iOS プロジェクト構築済み**（GitHub Actions でビルド確認。Xcode 環境で署名して申請するだけ） |
 | Web公開 | https://kiyotake1229.github.io/nagi-pond/ |
 | サポート・プライバシーポリシー | https://kiyotake1229.github.io/nagi-pond/support.html |
 | 確認用（Claude Artifact） | https://claude.ai/artifact/FivdBkt9EX3YCDXuZuuNqn （非公開。見るには共有設定が必要） |
 | リポジトリ | https://github.com/kiyotake1229/nagi-pond |
-| 本体 | `index.html`（約120KB。画像・音源ファイルなし） |
+| 本体 | `index.html`（約130KB。画像・音源ファイルなし） |
+| 自動テスト | `node tools/test.mjs`（24件。長時間の動作・保存データ・iOS の控え・引き継ぎなど） |
 | 通信 | なし（完全オフライン。外部フォントも使わない） |
 | データ | 端末内のみ（localStorage のキー `nagi.v1`。iOS 版はアプリ用の保存領域にも二重に保存） |
 | PWA | 対応（`manifest.json` / `sw.js` / アイコン一式） |
@@ -36,6 +37,7 @@ App Store への申請手順は **[ios-app/岩崎さんへの引き渡し手順.
 - **記録** — 今日の時間、続けた日数、一週間のグラフ
 - **おやすみタイマー** — 15/30/60分で音が消えて画面が暗くなる
 - **夜のお知らせ（iOS 版）** — 毎晩、季節のひとことと一緒に通知
+- **記録の引き継ぎ** — 引き継ぎコードで、機種変更やブラウザ版→アプリ版でも池をそのまま移せる
 
 ## ネイティブ版（iOS）の追加機能
 
@@ -52,6 +54,7 @@ App Store への申請手順は **[ios-app/岩崎さんへの引き渡し手順.
 
 - 現状の仕様と構成（最初の1本）: [docs/20261008_DOC_0001_ALL_現状の仕様と構成.md](docs/20261008_DOC_0001_ALL_現状の仕様と構成.md)
 - 以降の変更: #0002 名前 / #0003 写真 / #0004 夜のお知らせ / #0005 iOS化 / #0006 満開の文字のぼやけ / #0007 サポートページ / #0008 GitHub Pages 公開 / #0009 スクリーンショット / #0010 収益化の案
+- 不具合チェック（v1.2.0）: #0011 iOS の控え / #0012 池が止まる / #0013 合計時間 / #0014 意図しない開花 / #0015 小さな修正 / #0016 電波が弱いときの起動 / #0017 記録の引き継ぎ / #0018 自動テスト
 - 機能追加・バグ修正・改善をしたら、1件ごとに文書を足して `bash docs/manager/generate_docs_json.sh` を実行する
 
 ## ファイル構成
@@ -68,6 +71,7 @@ App Store への申請手順は **[ios-app/岩崎さんへの引き渡し手順.
     make-icons.sh         icon.svg から PNG 一式と iOS 用の元画像を作る
     make-artifact.sh      Claude Artifact に載せる版を作る
     make-screenshots.mjs  App Store 用スクリーンショットを作る（台紙: screenshot-frame.html）
+    test.mjs              自動テスト（node tools/test.mjs）
   ios-app/                iOS プロジェクト（Capacitor）
     岩崎さんへの引き渡し手順.md
     screenshots/          App Store 用スクリーンショット
@@ -78,11 +82,12 @@ App Store への申請手順は **[ios-app/岩崎さんへの引き渡し手順.
 ## 修正したいとき
 
 1. `index.html` を直す
-2. ローカルで確認する: `python3 -m http.server 8791` → http://localhost:8791/
-3. GitHub に push すると、数分で Web 公開版が更新され、iOS のビルド確認も自動で走る
-4. iOS に反映する: `ios-app/` で `npm run sync` → Xcode で再ビルド
-5. 確認用URLを更新する: `bash tools/make-artifact.sh 出力先.html` で作ったファイルを、同じ Artifact に載せ直す
-6. `sw.js` の保存対象（アイコンなど）を変えたときは、`CACHE` の名前（`nagi-v1`）の数字を上げる
+2. 自動テストを流す: `node tools/test.mjs`（全件合格を確かめる）
+3. ローカルで確認する: `python3 -m http.server 8791` → http://localhost:8791/
+4. GitHub に push すると、数分で Web 公開版が更新され、iOS のビルド確認も自動で走る
+5. iOS に反映する: `ios-app/` で `npm run sync` → Xcode で再ビルド
+6. 確認用URLを更新する: `bash tools/make-artifact.sh 出力先.html` で作ったファイルを、同じ Artifact に載せ直す
+7. `sw.js` の保存対象（アイコンなど）を変えたときは、`CACHE` の名前（今は `nagi-v2`）の数字を上げる
 
 `ios-app/node_modules/`（約100MB）は Dropbox の同期を重くするので、使い終わったら消してよい（`npm install` で戻る）。
 
