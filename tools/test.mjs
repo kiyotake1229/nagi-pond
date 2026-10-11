@@ -38,7 +38,7 @@ class FakeAudioContext {
 function makeApp({ storage: preset, native, w = 390, h = 844, prefs: prefsPreset, ua = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', audioSession, platform, touch } = {}) {
   const storage = new Map(Object.entries(preset || {}));
   const clock = { now: 0, timers: [], seq: 0 };
-  const rafs = [];
+  const rafs = [], pendingRaf = []; // rafs: これまでに頼まれた全部、pendingRaf: 次の書き換えで呼ぶもの
   const flags = { drawThrows: false };
   // canvas の偽物。大きさ0の canvas を描こうとしたら、ブラウザと同じく例外にする
   const ctx2d = new Proxy({}, {
@@ -121,7 +121,7 @@ function makeApp({ storage: preset, native, w = 390, h = 844, prefs: prefsPreset
     location: { protocol: 'https:', hostname: 'example.test', reload() { throw new Error('再読み込みは使わない'); } },
     performance: { now: () => clock.now },
     devicePixelRatio: 2, innerWidth: w, innerHeight: h, addEventListener() {},
-    requestAnimationFrame: fn => { rafs.push(fn); return rafs.length; }, cancelAnimationFrame() {},
+    requestAnimationFrame: fn => { rafs.push(fn); pendingRaf.push(fn); return rafs.length; }, cancelAnimationFrame() {},
     setTimeout, clearTimeout, Date: FakeDate, AudioContext: FakeAudioContext,
     TextEncoder, TextDecoder, btoa, atob, Blob, Capacitor: capacitor,
   };
@@ -132,13 +132,19 @@ function makeApp({ storage: preset, native, w = 390, h = 844, prefs: prefsPreset
   // dt 秒ずつ n コマ進める（予約された処理も同じだけ時計を進める）
   const run = (sec, dt = 1 / 30, each) => { for (let i = 0, n = Math.round(sec / dt); i < n; i++) { advance(dt * 1000); N.step(dt); if (each) each(i); } };
   const flush = () => new Promise(r => globalThis.setTimeout(r, 0));
-  // 画面の書き換え（毎秒60回）を sec 秒ぶん起こし、実際に描いた回数を返す
-  const frames = sec => {
-    const before = N.drawCount;
-    for (let i = 0, n = Math.round(sec * 60); i < n; i++) { advance(1000 / 60); rafs[rafs.length - 1](clock.now); }
+  // 画面の書き換え（ふつうは毎秒60回）を sec 秒ぶん起こし、実際に描いた回数を返す。
+  // 本物と同じく、書き換えの時点で頼まれているものだけを呼ぶ（タイマーで休んでいるあいだは呼ばない）
+  const frames = (sec, hz = 60) => {
+    const before = N.drawCount; let calls = 0;
+    for (let i = 0, n = Math.round(sec * hz); i < n; i++) {
+      advance(1000 / hz);
+      const cbs = pendingRaf.splice(0); calls += cbs.length;
+      for (const fn of cbs) fn(clock.now);
+    }
+    frames.calls = calls;
     return N.drawCount - before;
   };
-  return { N, ctx, document, storage, prefs, scheduled, clock, advance, run, flush, rafs, flags, errors, get, fireDoc, frames };
+  return { N, ctx, document, storage, prefs, scheduled, clock, advance, run, flush, rafs, pendingRaf, flags, errors, get, fireDoc, frames };
 }
 
 // ---- テストの進め方 ----
@@ -349,10 +355,10 @@ await test('画面の大きさが0の瞬間があっても、描画で止まら�
 await test('描画で例外が出ても、次のコマが予約されて池は動き続ける', () => {
   const app = makeApp();
   app.flags.drawThrows = true;
-  const before = app.rafs.length;
-  app.rafs[app.rafs.length - 1](16);
-  check(app.rafs.length === before + 1, '例外のあと次のコマが予約されていない');
+  app.frames(1);
+  check(app.pendingRaf.length + app.clock.timers.length > 0, '例外のあと次のコマが予約されていない');
   app.flags.drawThrows = false;
+  check(app.frames(2) > 100, '例外が止んだあと、描く回数が戻らない');
 });
 
 await test('おやすみタイマー: 時間が来ると眠り、触ると戻る', () => {
@@ -369,6 +375,9 @@ await test('池の写真が作れる', () => {
   app.N.takePhoto(); app.advance(400);
   check(app.get('photo').classList.contains('show'), '写真の画面が出ない');
   check(app.get('photoImg').src.startsWith('data:image/jpeg'), '写真の画像が無い');
+  check(app.document.body.classList.contains('photo-open'), '写真の画面で、知らせを下に出す印が付いていない');
+  app.N.closePhoto();
+  check(!app.get('photo').classList.contains('show') && !app.document.body.classList.contains('photo-open'), '写真の画面を閉じても印が残っている');
 });
 
 // ---- 省電力 ----
@@ -386,6 +395,31 @@ await test('省電力: 触っているあいだは毎秒60回、30秒触らな�
   app.fireDoc('pointerdown');
   const back = app.frames(3) / 3;
   check(back > 57, `触ったあと 毎秒${back.toFixed(1)}回`);
+});
+
+await test('画面の書き換えが毎秒120回・90回の端末でも、描くのは毎秒60回まで（省電力がオフでも）', () => {
+  for (const eco of [true, false]) {
+    const app = makeApp({ storage: { [KEY]: JSON.stringify({ koi: [{ kind: 'kohaku', id: 1 }], set: { eco } }) } });
+    app.N.start(); app.fireDoc('pointerdown');
+    const r120 = app.frames(5, 120) / 5, r90 = app.frames(5, 90) / 5;
+    check(r120 > 57 && r120 < 63, `省電力${eco ? 'オン' : 'オフ'}・120Hz で 毎秒${r120.toFixed(1)}回`);
+    check(r90 > 40 && r90 < 63, `省電力${eco ? 'オン' : 'オフ'}・90Hz で 毎秒${r90.toFixed(1)}回`);
+  }
+});
+
+await test('省電力: 描かないコマのあいだは休み、画面の書き換えのたびに呼ばれない。おやすみ中は0.5秒に1回だけ', () => {
+  const app = makeApp(); const { N } = app;
+  N.start(); app.fireDoc('pointerdown');
+  app.frames(3); const busyCalls = app.frames.calls;
+  app.advance(40000);
+  const drawn = app.frames(10), idleCalls = app.frames.calls;
+  check(drawn > 280 && drawn < 320, `30秒後に10秒で ${drawn} 回描いた`);
+  check(idleCalls <= drawn + 15, `10秒で ${idleCalls} 回呼ばれた（描いたのは ${drawn} 回。毎回呼ばれている）`);
+  check(busyCalls >= 175, `触っているあいだ3秒で ${busyCalls} 回しか呼ばれない`);
+  N.setSleep(15); app.advance(15 * 60 * 1000 + 100); N.step(1 / 30);
+  check(N.sleeping, '眠らない');
+  app.frames(10);
+  check(app.frames.calls <= 25, `おやすみ中に10秒で ${app.frames.calls} 回呼ばれた`);
 });
 
 await test('省電力: 設定でオフにすると、触らなくても毎秒60回のまま', () => {

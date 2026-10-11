@@ -4,13 +4,13 @@
 
 | 項目 | 内容 |
 |---|---|
-| 状態 | **Web版 1.3.0 公開中**。PWA対応済み。**iOS プロジェクト構築済み**（GitHub Actions でビルド確認。Xcode 環境で署名して申請するだけ） |
+| 状態 | **Web版 1.3.1 公開中**。PWA対応済み。**iOS プロジェクト構築済み**（GitHub Actions でビルド確認。Xcode 環境で署名して申請するだけ） |
 | Web公開 | https://kiyotake1229.github.io/nagi-pond/ |
 | サポート・プライバシーポリシー | https://kiyotake1229.github.io/nagi-pond/support.html |
 | 確認用（Claude Artifact） | https://claude.ai/artifact/FivdBkt9EX3YCDXuZuuNqn （非公開。見るには共有設定が必要） |
 | リポジトリ | https://github.com/kiyotake1229/nagi-pond |
 | 本体 | `index.html`（約130KB。画像・音源ファイルなし） |
-| 自動テスト | `node tools/test.mjs`（32件。長時間の動作・保存データ・iOS の控え・引き継ぎなど） |
+| 自動テスト | `node tools/test.mjs`（34件。長時間の動作・保存データ・iOS の控え・引き継ぎなど） |
 | 通信 | なし（完全オフライン。外部フォントも使わない） |
 | データ | 端末内のみ（localStorage のキー `nagi.v1`。iOS 版はアプリ用の保存領域にも二重に保存） |
 | PWA | 対応（`manifest.json` / `sw.js` / アイコン一式） |
@@ -39,7 +39,7 @@ App Store への申請手順は **[ios-app/岩崎さんへの引き渡し手順.
 - **夜のお知らせ（iOS 版）** — 毎晩、季節のひとことと一緒に通知
 - **記録の引き継ぎ** — 引き継ぎコードで、機種変更やブラウザ版→アプリ版でも池をそのまま移せる
 - **マナーモードでも鳴らす（iPhone・iPad）** — 消音スイッチ中も音を出せる設定（初期はオフ）
-- **省電力** — 30秒触らないと描く回数を半分、5分で3分の1に（初期はオン）
+- **省電力** — 30秒触らないと描く回数を半分、5分で3分の1に（初期はオン）。置いたままのときの処理の量は、入れる前の約半分（`tools/measure-power.mjs` で計測）
 
 ## ネイティブ版（iOS）の追加機能
 
@@ -58,6 +58,7 @@ App Store への申請手順は **[ios-app/岩崎さんへの引き渡し手順.
 - 以降の変更: #0002 名前 / #0003 写真 / #0004 夜のお知らせ / #0005 iOS化 / #0006 満開の文字のぼやけ / #0007 サポートページ / #0008 GitHub Pages 公開 / #0009 スクリーンショット / #0010 収益化の案
 - 不具合チェック（v1.2.0）: #0011 iOS の控え / #0012 池が止まる / #0013 合計時間 / #0014 意図しない開花 / #0015 小さな修正 / #0016 電波が弱いときの起動 / #0017 記録の引き継ぎ / #0018 自動テスト
 - v1.3.0: #0019 マナーモードでも鳴らす / #0020 省電力 / #0021 鍵の印のずれ
+- v1.3.1: #0022 実機の代わりの検証（WebKit・省電力の計測） / #0023 写真の画面で知らせがかぶる / #0024 置いたままのときの電池をさらに節約
 - 機能追加・バグ修正・改善をしたら、1件ごとに文書を足して `bash docs/manager/generate_docs_json.sh` を実行する
 
 ## ファイル構成
@@ -75,6 +76,8 @@ App Store への申請手順は **[ios-app/岩崎さんへの引き渡し手順.
     make-artifact.sh      Claude Artifact に載せる版を作る
     make-screenshots.mjs  App Store 用スクリーンショットを作る（台紙: screenshot-frame.html）
     test.mjs              自動テスト（node tools/test.mjs）
+    webkit-check.mjs      iPhone と同じ WebKit で動かして確かめる（要 Playwright。使い方はファイルの先頭）
+    measure-power.mjs     省電力の効き目を測る（描く回数と CPU の仕事量）
   ios-app/                iOS プロジェクト（Capacitor）
     岩崎さんへの引き渡し手順.md
     screenshots/          App Store 用スクリーンショット

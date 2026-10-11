@@ -68,6 +68,7 @@ svg{display:block}
 @media (hover:hover){.dock button:hover{background:rgba(236,230,211,.09);color:var(--paper)}.dock button:hover svg{transform:translateY(-2px)}}
 body.calm .hud,body.calm .dock{opacity:.3}
 body.calm .dock:hover,body.calm .hud:hover{opacity:1}
+body.still .buds,body.still .hud:not(:hover) .icon-btn,body.still .dock:not(:hover){-webkit-backdrop-filter:none;backdrop-filter:none}
 body.intro .hud{opacity:0;transform:translateY(-14px);pointer-events:none}
 body.intro .dock{opacity:0;transform:translate(-50%,18px);pointer-events:none}
 body.breathing .dock,body.breathing .hud .buds{opacity:0;pointer-events:none}
@@ -97,6 +98,7 @@ body.breathing .dock,body.breathing .hud .buds{opacity:0;pointer-events:none}
 .hint{position:fixed;left:50%;bottom:calc(var(--sb) + 112px);transform:translate(-50%,8px);width:max-content;max-width:calc(100% - 32px);text-align:center;font-family:var(--display);font-size:15px;letter-spacing:.16em;line-height:1.7;color:var(--paper);text-shadow:0 1px 14px rgba(0,0,0,.6);opacity:0;pointer-events:none;transition:opacity 1.2s var(--ease),transform 1.2s var(--ease);z-index:4}
 .hint.show{opacity:1;transform:translate(-50%,0)}
 .toasts{position:fixed;left:0;right:0;top:calc(var(--st) + 70px);display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;z-index:44;padding:0 16px}
+body.photo-open .toasts{top:auto;bottom:calc(var(--sb) + 14px)}
 .toast{max-width:100%;display:flex;flex-direction:column;align-items:center;gap:2px;padding:11px 20px;border-radius:18px;background:var(--sheet);border:1px solid var(--hair);box-shadow:0 10px 40px rgba(0,0,0,.35);text-align:center;animation:tin .7s var(--ease)}
 .toast b{font-family:var(--display);font-weight:500;font-size:15px;letter-spacing:.1em}
 .toast span{font-size:12px;color:var(--paper-2);letter-spacing:.06em}
@@ -399,7 +401,7 @@ const RARE_LABEL = { 1: 'よく見る', 2: 'ときどき', 3: 'めずらしい' 
 const STAGES = [[0, '稚魚'], [6, '若鯉'], [20, '成鯉'], [45, '大鯉']];
 const stageOf = xp => { let s = 0; for (let i = 0; i < STAGES.length; i++) if (xp >= STAGES[i][0]) s = i; return s; };
 const koiScale = xp => .5 + .62 * (1 - Math.exp(-xp / 22));
-const VERSION = '1.3.0';
+const VERSION = '1.3.1';
 const SUPPORT_URL = 'https://kiyotake1229.github.io/nagi-pond/support.html';
 const POND_MAX = 9;
 const BLOOM_NEED = 4; // つぼみが開くのに必要な波紋の量
@@ -1546,7 +1548,16 @@ function nextToast() {
 
 // 操作が無いあいだは画面の部品を薄くする
 let calmTimer = 0;
-function poke() { document.body.classList.remove('calm'); clearTimeout(calmTimer); calmTimer = setTimeout(() => { if (!sheetOpen) document.body.classList.add('calm'); }, 7000); }
+let stillTimer = 0;
+function poke() {
+  document.body.classList.remove('calm', 'still'); clearTimeout(calmTimer); clearTimeout(stillTimer);
+  calmTimer = setTimeout(() => {
+    if (sheetOpen) return;
+    document.body.classList.add('calm');
+    // 薄くなりきったら（1.6秒）、すりガラスのぼかしも外す。薄い状態なら見た目はほぼ変わらない
+    stillTimer = setTimeout(() => { if (document.body.classList.contains('calm')) document.body.classList.add('still'); }, 1800);
+  }, 7000);
+}
 $('dock').addEventListener('pointerdown', poke); $('hud').addEventListener('pointerdown', poke);
 
 // ================= シート =================
@@ -1803,6 +1814,7 @@ function takePhoto() {
   buzz('medium');
   try { buildPhoto(); } catch (e) { toast('写真を作れませんでした', 'もう一度お試しください'); return; }
   $('photoNote').textContent = NATIVE ? '共有から写真に保存することもできます' : '画像を長押しすると保存できます';
+  document.body.classList.add('photo-open');
   setTimeout(() => $('photo').classList.add('show'), 260);
 }
 function buildPhoto() {
@@ -1858,7 +1870,7 @@ async function sharePhoto() {
   } catch (e) { if (e && e.name === 'AbortError') return; }
   toast('この画面からは共有できません', '画像を長押しして保存してください');
 }
-function closePhoto() { $('photo').classList.remove('show'); }
+function closePhoto() { $('photo').classList.remove('show'); document.body.classList.remove('photo-open'); }
 $('shotBtn').addEventListener('click', () => { poke(); takePhoto(); });
 $('photoShare').addEventListener('click', sharePhoto);
 $('photoClose').addEventListener('click', closePhoto);
@@ -1943,22 +1955,28 @@ const ECO_AFTER = 30000, ECO_DEEP = 300000; // 30秒で毎秒30回、5分で毎�
 let lastInput = performance.now(), drawCount = 0;
 document.addEventListener('pointerdown', () => { lastInput = performance.now(); }, true);
 document.addEventListener('keydown', () => { lastInput = performance.now(); }, true);
-// 次に描くまでの最短の間隔（ミリ秒）。0 なら毎コマ描く
+// 次に描くまでの最短の間隔（ミリ秒）。画面の書き換えが毎秒120回などの端末でも、描くのは毎秒60回まで
 function frameGap(now) {
-  if (!S.set.eco) return 0;
+  const full = 1000 / 60;
+  if (!S.set.eco) return full;
   // 呼吸の輪・満開の演出・写真の撮影中は、なめらかさを優先する
-  if (breath || flash > 0 || (round && round.done && !round.celebrated)) return 0;
+  if (breath || flash > 0 || (round && round.done && !round.celebrated)) return full;
   const idle = now - lastInput;
-  return idle > ECO_DEEP ? 1000 / 20 : idle > ECO_AFTER ? 1000 / 30 : 0;
+  return idle > ECO_DEEP ? 1000 / 20 : idle > ECO_AFTER ? 1000 / 30 : full;
 }
 let last = performance.now(), frameErr = 0;
+// 次のコマを頼む。間が空くときは、その手前までタイマーで休み、画面の書き換えのたびに呼ばれないようにする
+function schedule(wait) {
+  if (wait > 20) setTimeout(() => requestAnimationFrame(frame), wait - 12);
+  else requestAnimationFrame(frame);
+}
 function frame(now) {
-  // 先に次の回を予約する（途中で例外が出ても池が止まらないように）
-  requestAnimationFrame(frame);
-  // おやすみ中は画面が暗いので、描くのをやめて電池を使わない
-  if (sleeping) { last = now; return; }
+  // おやすみ中は画面が暗いので描かない。0.5秒に1回だけ起きて確かめる
+  if (sleeping) { last = now; setTimeout(() => requestAnimationFrame(frame), 500); return; }
   const gap = frameGap(now);
-  if (gap && now - last < gap - 4) return; // 画面の書き換え（毎秒60回）の何回かに1回だけ描く
+  if (now - last < gap - 4) { schedule(gap - (now - last)); return; } // まだ描く時刻でない
+  // 先に次の回を予約する（途中で例外が出ても池が止まらないように）
+  schedule(gap);
   const dt = Math.min(.05, Math.max(0, (now - last) / 1000)); last = now;
   try { update(dt); draw(); drawCount++; }
   catch (e) { if (frameErr++ < 3) console.error(e); }
@@ -1978,6 +1996,7 @@ window.__nagi = {
   get S() { return S; }, koi, pads, ripples, pellets, lights, air, floaters, start, tapAt, celebrate, openSheet, closeSheet, takePhoto, closePhoto, breathStart, breathFinish,
   get round() { return round; }, get breath() { return breath; }, get sleeping() { return sleeping; }, get T() { return T; }, get gen() { return gen; },
   get drawCount() { return drawCount; }, get unmuteEl() { return unmuteEl; }, IS_IOS, applySilentMode,
+  idleFor(ms) { lastInput = performance.now() - ms; }, // 計測用: ms ミリ秒触っていないことにする
   step(dt) { update(dt); draw(); }, resize, sanitize, exportCode, parseCode, applyState, resetAll, streak, recordHTML, settingsHTML, zukanHTML, sekkiNow, scheduleNotify, setSleep, wakeUp, initNativeStore,
 };
 })();
