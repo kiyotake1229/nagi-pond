@@ -12,6 +12,7 @@ const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const html = fs.readFileSync(process.env.NAGI_HTML || path.join(root, 'index.html'), 'utf8');
 const script = html.slice(html.lastIndexOf('<script>') + 8, html.lastIndexOf('</script>'));
 const KEY = 'nagi.v1';
+const KINDS_RARE3 = ['tancho', 'shusui', 'kujaku'];
 
 // ---- ブラウザの代わり（テストに必要な分だけ） ----
 class FakeParam {
@@ -482,6 +483,86 @@ await test('マナーモード: Audio Session の無い古い iPhone では、�
   check(el.src.startsWith('data:audio/wav;base64,') && wav.length === 4044 && wav.toString('ascii', 0, 4) === 'RIFF' && wav.toString('ascii', 8, 12) === 'WAVE' && wav[44] === 128, '無音の WAV の形がおかしい');
   app.document.hidden = true; app.fireDoc('visibilitychange');
   check(!el.playing, '見えなくなっても止まらない');
+});
+
+// ---- 目標・今日のお題・めずらしい鯉 ----
+await test('今日のお題: 同じ日はいつ開いても同じ3つ。種類が重ならず、「蓮」と「◯◯の蓮」は同じ日に出ない', () => {
+  const a = makeApp().N, b = makeApp().N;
+  check(a.S.daily && a.S.daily.items.length === 3, 'お題が3つない');
+  check(JSON.stringify(a.S.daily.items) === JSON.stringify(b.S.daily.items), '同じ日なのにお題が違う');
+  for (let i = 0; i < 400; i++) {
+    const day = `2026-${String(1 + (i % 12)).padStart(2, '0')}-${String(1 + (i % 28)).padStart(2, '0')}x${i}`;
+    const items = a.makeDaily(day).items, types = items.map(x => x.type);
+    check(items.length === 3 && new Set(types).size === 3, `${day}: 種類が重なる ${types}`);
+    check(!(types.includes('bloom') && types.includes('bloomColor')), `${day}: 蓮と色の蓮が同時に出た`);
+    check(items.every(x => a.missionText(x).length > 0), `${day}: 文面が無い`);
+    const c = items.find(x => x.type === 'bloomColor'); if (c) check(c.color === 'pink', `まだ解放していない色のお題 ${c.color}`);
+  }
+});
+
+await test('今日のお題: 日付が変わると作り直し、壊れたお題のデータでも起動できる', () => {
+  const app = makeApp({ storage: { [KEY]: JSON.stringify({ koi: [{ kind: 'kohaku', id: 1 }], daily: { day: '2000-01-01', items: [{ type: 'bloom', need: 5, have: 5, done: true }, { type: 'photo', need: 1, have: 1 }, { type: 'feed', need: 3, have: 3 }], reward: true } }) } });
+  app.N.start(); app.run(1);
+  check(app.N.S.daily.day !== '2000-01-01' && app.N.S.daily.items.every(i => !i.done) && !app.N.S.daily.reward, '古い日のお題が残っている');
+  // 開いたまま日付をまたいだとき（20秒ごとに確かめる）
+  app.N.S.daily.day = '2000-01-02'; app.N.S.daily.reward = true; app.run(21);
+  check(app.N.S.daily.day !== '2000-01-02' && !app.N.S.daily.reward, '開いたまま日付が変わっても、お題が新しくならない');
+  for (const bad of [{ day: 'x', items: [] }, { day: '2026-10-16', items: [{ type: 'fly', need: 1 }, 1, 2] }, { day: '2026-10-16', items: [{ type: 'bloomColor', need: 3, color: 'black' }, { type: 'photo', need: 1 }, { type: 'feed', need: 3 }] }, 'oops']) {
+    const app2 = makeApp({ storage: { [KEY]: JSON.stringify({ koi: [{ kind: 'kohaku', id: 1 }], daily: bad }) } });
+    app2.N.start(); app2.run(1);
+    check(app2.N.S.daily && app2.N.S.daily.items.length === 3 && app2.N.S.daily.items.every(i => i.need > 0), `壊れたお題 ${JSON.stringify(bad).slice(0, 40)} が直らない`);
+  }
+});
+
+await test('今日のお題: 咲かせる・満開・餌・なぞる・写真・呼吸・すごす で進み、3つ達成でごほうび（めずらしい鯉）が付く', () => {
+  const day = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
+  const items = [{ type: 'bloom', need: 5, have: 0 }, { type: 'feed', need: 3, have: 0 }, { type: 'photo', need: 1, have: 0 }];
+  const app = makeApp({ storage: { [KEY]: JSON.stringify({ koi: [{ kind: 'kohaku', id: 1 }], daily: { day, items } }) } }); const { N } = app;
+  N.start(); app.run(2);
+  bloomAll(app); app.run(6);
+  const it = N.S.daily.items;
+  check(it[0].done, `蓮のお題が ${it[0].have}/5`);
+  // 鯉の頭の近くに餌を落として、食べ終わるまで待つ（鯉がいつ餌に気づくかは偶然しだいのため）
+  for (let i = 0; i < 90 && !it[1].done; i++) { const h = N.koi[i % N.koi.length].pts[0]; N.tapAt(h.x, h.y); app.run(1); }
+  check(it[1].done, `餌のお題が ${it[1].have}/3`);
+  check(!N.S.rareBoost && !N.S.daily.reward, '3つそろう前にごほうびが付いた');
+  N.takePhoto(); app.advance(500);
+  check(it[2].done && N.S.daily.reward && N.S.rareBoost, '3つ達成してもごほうびが付かない');
+  check(app.get('goalBtn').innerHTML.includes('お題 達成'), '上の札が「お題 達成」にならない');
+  // ほかの種類のお題も進むか（直接確かめる）
+  N.S.daily.items = [{ type: 'glide', need: 2, have: 0, done: false }, { type: 'breath', need: 1, have: 0, done: false }, { type: 'stay', need: 60, have: 0, done: false }];
+  N.mission('glide'); N.mission('glide'); N.mission('breath'); app.run(61);
+  check(N.S.daily.items.every(i => i.done), `なぞる・呼吸・すごす が進まない ${JSON.stringify(N.S.daily.items)}`);
+});
+
+await test('ごほうび: 次の満開は、まだ出会っていないめずらしい鯉。名前の大きな表示と光の演出が出る', () => {
+  const app = makeApp({ storage: { [KEY]: JSON.stringify({ koi: [{ kind: 'kohaku', id: 1 }], seen: { kohaku: true, tancho: true }, rareBoost: true, hint: 3 }) } }); const { N } = app;
+  N.start(); app.run(2); bloomAll(app); app.run(1.5);
+  check(N.round.celebrated && !N.S.rareBoost, 'ごほうびが使われない');
+  app.run(4.5);
+  const newcomer = N.S.koi[N.S.koi.length - 1];
+  check(['shusui', 'kujaku'].includes(newcomer.kind), `来た鯉が ${newcomer.kind}（まだ出会っていないめずらしい鯉のはず）`);
+  check(app.get('rare').classList.contains('show') && app.get('rareName').textContent.length > 0, 'めずらしい鯉の名前が出ない');
+  check(N.koi.some(k => k.aura > 0), '光をまとっていない');
+  check([...app.get('toasts').children].some(t => t.innerHTML.includes('めずらしい鯉')), '「めずらしい鯉」の知らせが出ない');
+  const fps = app.frames(3) / 3;
+  check(fps > 57, `光の演出中に毎秒 ${fps.toFixed(1)} 回`);
+});
+
+await test('はじめて出会う鯉はしばらく光り、よく見る鯉の2匹目以降は光らない', () => {
+  const app = makeApp({ storage: { [KEY]: JSON.stringify({ koi: [{ kind: 'kohaku', id: 1 }], seen: Object.fromEntries(['kohaku', 'sanke', 'showa', 'tancho', 'shiro', 'hiutsuri', 'asagi', 'shusui', 'ogon', 'platinum', 'kujaku'].map(k => [k, true])), hint: 3 }) } }); const { N } = app;
+  N.start(); app.run(2); bloomAll(app); app.run(4);
+  const last = N.koi[N.koi.length - 1];
+  check(last.aura > 0 === (last.d.kind === 'chagoi' || KINDS_RARE3.includes(last.d.kind)), `${last.d.kind} の光り方がおかしい（${last.aura}）`);
+});
+
+await test('上の札と目標の画面: 図鑑の数・お題の進み・ごほうびの説明が出る', () => {
+  const app = makeApp(); const { N } = app;
+  const chip = app.get('goalBtn').innerHTML;
+  check(/図鑑 <b>3<\/b>\/12/.test(chip) && /お題 <b>0<\/b>\/3/.test(chip), `札が ${chip}`);
+  const html = N.goalsHTML();
+  check(N.S.daily.items.every(i => html.includes(N.missionText(i))), '目標の画面にお題が無い');
+  check(html.includes('めずらしい鯉') && html.includes('図鑑') && html.includes('池のしつらえ'), '目標の画面の項目が足りない');
 });
 
 // ---- 結果 ----

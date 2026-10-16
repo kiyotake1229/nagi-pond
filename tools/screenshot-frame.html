@@ -29,8 +29,9 @@ const iw = +q.get('iw') || 402, ih = +q.get('ih') || 786; // アプリの表示�
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // 撮影用の池の状態（鯉・図鑑・記録）。音は消しておく
-function seedState(set) {
-  const now = Date.now(), day = 864e5;
+function seedState(set, extra) {
+  const now = Date.now(), day = 864e5, t = new Date(now);
+  const today = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
   const days = {};
   for (let i = 0; i < 7; i++) { const d = new Date(now - i * day); days[`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`] = [540, 1260, 300, 960, 720, 1500, 840][i]; }
   return {
@@ -46,6 +47,9 @@ function seedState(set) {
     ],
     seen: { kohaku: true, ogon: true, showa: true, tancho: true, asagi: true, sanke: true, chagoi: true, platinum: true, shiro: true },
     set: Object.assign({ bgm: false, sfx: false, vib: false, vol: 0, mute: true, scene: 'night', season: 'autumn', shishi: false, lantern: true, bp: 'totonou', blen: 3, notify: false, notifyHour: 21 }, set),
+    // 今日のお題（撮影中に達成の知らせが写らないよう、場面の操作では終わらない量にしておく）
+    daily: { day: today, items: [{ type: 'glide', need: 25, have: 25 }, { type: 'feed', need: 20, have: 4 }, { type: 'stay', need: 480, have: 130 }] },
+    ...extra,
   };
 }
 // つぼみに近いところを何度か触って咲かせる
@@ -60,6 +64,13 @@ async function bloom(N, count, partial) {
 const SCENES = {
   pond: { h: '触れると、波紋と音がひろがる', p: '夜の池で、ひと息つくリラックスゲーム',
     run: async N => { await bloom(N, 2, true); await sleep(2600); N.tapAt(iw * .5, ih * .62); await sleep(900); } },
+  rare: { h: 'めずらしい鯉との出会い', p: '12種類、1匹ずつ違う模様',
+    // ごほうびが残っている状態で満開にし、名前の大きな表示が出たところで撮る
+    state: { rareBoost: true, seen: { kohaku: true, ogon: true, showa: true, tancho: true, asagi: true, sanke: true, chagoi: true, platinum: true, shiro: true } },
+    run: async N => { await bloom(N, 5); for (let i = 0; i < 60 && !N.round.celebrated; i++) await sleep(100); await sleep(5200); } },
+  goals: { h: '毎日かわる、今日のお題', p: '3つ達成すると、めずらしい鯉がやってくる',
+    state: { daily: { day: 'TODAY', items: [{ type: 'bloom', need: 8, have: 8 }, { type: 'feed', need: 15, have: 15 }, { type: 'photo', need: 1, have: 0 }] } },
+    run: async N => { await bloom(N, 2); await sleep(1500); N.openSheet('goals'); await sleep(1300); } },
   bloom: { h: '五輪咲けば、満開', p: '新しい鯉が池にやってくる',
     // 満開の文字がはっきり見え、新しい鯉の知らせが出たところで撮る
     run: async N => { await bloom(N, 5); for (let i = 0; i < 60 && !N.round.celebrated; i++) await sleep(100); await sleep(3100); } },
@@ -93,13 +104,15 @@ window.setupScene = async name => {
   document.getElementById('p').textContent = sc.p;
   layout();
   localStorage.clear();
-  localStorage.setItem('nagi.v1', JSON.stringify(seedState(sc.set || {})));
+  const st0 = seedState(sc.set || {}, sc.state || {});
+  if (st0.daily && st0.daily.day === 'TODAY') { const t = new Date(); st0.daily.day = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`; }
+  localStorage.setItem('nagi.v1', JSON.stringify(st0));
   const f = document.getElementById('app');
   await new Promise(r => { f.onload = r; f.src = '../index.html?shot=' + Date.now(); });
   const w = f.contentWindow;
   // 撮影中は画面の部品を薄くしない・タイトルの切り替えを待たない
   const st = w.document.createElement('style');
-  st.textContent = 'body.calm .hud { opacity: 1 !important; } body.calm:not(.breathing) .dock { opacity: 1 !important; } .title { transition: none !important; }';
+  st.textContent = 'body.calm .hud { opacity: 1 !important; } body.calm:not(.breathing) .dock { opacity: 1 !important; } body.still .buds, body.still .goal, body.still .icon-btn, body.still .dock { -webkit-backdrop-filter: blur(12px) !important; backdrop-filter: blur(12px) !important; } .title { transition: none !important; }';
   w.document.head.appendChild(st);
   const N = w.__nagi;
   N.start();

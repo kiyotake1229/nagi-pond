@@ -1,4 +1,4 @@
-// 凪の池: App Store 用のスクリーンショットを作る（見出し入り・5場面 × 4サイズ）。MAZE の仕組みを流用
+// 凪の池: App Store 用のスクリーンショットを作る（見出し入り・7場面 × 4サイズ）。MAZE の仕組みを流用
 // 使い方: node tools/make-screenshots.mjs（要 Node.js 22 以降と Google Chrome。ほかに入れるものは無い）
 // 出力: ios-app/screenshots/<端末>/<番号>-<場面>.jpg
 // しくみ: この中で小さな Web サーバーを立て、Chrome を画面なしで起動して tools/screenshot-frame.html を
@@ -23,7 +23,7 @@ const DEVICES = [
   { name: 'iphone-5.5', w: 414, h: 736, dpr: 3, iw: 414, ih: 736 - 20 },
   { name: 'ipad-13', w: 1032, h: 1376, dpr: 2, iw: 1032, ih: 1376 - 24 - 20 },
 ];
-const SCENES = ['pond', 'bloom', 'zukan', 'breath', 'season'];
+const SCENES = ['pond', 'bloom', 'rare', 'goals', 'zukan', 'breath', 'season'];
 
 // ---- アプリのフォルダを配る小さな Web サーバー ----
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml' };

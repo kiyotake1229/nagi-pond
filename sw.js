@@ -1,7 +1,8 @@
 // 凪の池: 一度開けば通信なしで起動できるようにする
 // 本体（index.html）は通信できれば最新を取り、できなければ保存分を使う。アイコンなどは保存分を優先する
 // 電波が弱いと通信の返事を長く待ってしまうため、本体は3秒で見切って保存分を出す
-const CACHE = "nagi-v2";
+// 本体はブラウザの一時保存を使わず、毎回「新しくなっていないか」を確かめる（更新がすぐ届くように）
+const CACHE = "nagi-v3";
 const TIMEOUT = 3000;
 const ASSETS = ["./", "./index.html", "./manifest.json", "./icon.svg", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS))); self.skipWaiting(); });
@@ -10,7 +11,7 @@ self.addEventListener("fetch", e => {
   const req = e.request;
   if (req.method !== "GET") return;
   if (req.mode === "navigate") {
-    const net = fetch(req).then(res => {
+    const net = fetch(req.url, { cache: "no-cache", credentials: "same-origin" }).then(res => {
       if (res.ok) { const cp = res.clone(); caches.open(CACHE).then(c => c.put("./index.html", cp)); }
       return res;
     });

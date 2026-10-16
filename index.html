@@ -47,6 +47,15 @@ svg{display:block}
 .hud>*{pointer-events:auto}
 .sekki{writing-mode:vertical-rl;font-family:var(--display);font-size:15px;letter-spacing:.3em;color:var(--paper-2);line-height:1;display:flex;gap:8px;padding-top:4px;min-width:40px}
 .sekki small{font-size:10px;letter-spacing:.18em;color:var(--paper-3)}
+.hud-mid{display:flex;flex-direction:column;align-items:center;gap:7px;min-width:0}
+.goal{display:flex;align-items:center;gap:8px;padding:5px 12px;border-radius:999px;background:var(--glass);border:1px solid var(--hair);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);font-size:11px;letter-spacing:.08em;color:var(--paper-2);font-variant-numeric:tabular-nums;white-space:nowrap;transition:background .3s,transform .3s var(--ease),color .4s}
+.goal b{font-weight:500;color:var(--paper)}
+.goal i{width:3px;height:3px;border-radius:50%;background:var(--paper-3)}
+.goal.done .g-mission{color:var(--gold)}
+.goal:active{transform:scale(.94)}
+.goal.bump{animation:bump .9s var(--ease)}
+@keyframes bump{35%{transform:scale(1.14)}}
+@media (hover:hover){.goal:hover{background:rgba(236,230,211,.12)}}
 .buds{display:flex;gap:7px;padding:9px 13px;border-radius:999px;background:var(--glass);border:1px solid var(--hair);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
 .buds span{display:block;width:18px;height:18px;color:var(--paper-3);transition:color .8s,transform .8s var(--ease)}
 .buds span svg{width:100%;height:100%}
@@ -68,7 +77,7 @@ svg{display:block}
 @media (hover:hover){.dock button:hover{background:rgba(236,230,211,.09);color:var(--paper)}.dock button:hover svg{transform:translateY(-2px)}}
 body.calm .hud,body.calm .dock{opacity:.3}
 body.calm .dock:hover,body.calm .hud:hover{opacity:1}
-body.still .buds,body.still .hud:not(:hover) .icon-btn,body.still .dock:not(:hover){-webkit-backdrop-filter:none;backdrop-filter:none}
+body.still .buds,body.still .goal,body.still .hud:not(:hover) .icon-btn,body.still .dock:not(:hover){-webkit-backdrop-filter:none;backdrop-filter:none}
 body.intro .hud{opacity:0;transform:translateY(-14px);pointer-events:none}
 body.intro .dock{opacity:0;transform:translate(-50%,18px);pointer-events:none}
 body.breathing .dock,body.breathing .hud .buds{opacity:0;pointer-events:none}
@@ -92,12 +101,13 @@ body.breathing .dock,body.breathing .hud .buds{opacity:0;pointer-events:none}
 @keyframes halo{0%{opacity:.7;transform:scale(1)}100%{opacity:0;transform:scale(1.35,1.6)}}
 .start:active{transform:scale(.96)}
 @media (hover:hover){.start:hover{background:rgba(236,230,211,.14)}}
+.title-lead{margin:-12px 0 0;font-family:var(--display);font-size:14px;letter-spacing:.26em;padding-left:.26em;color:var(--paper-2);text-align:center;opacity:0;animation:fade 1.6s 1.4s var(--ease) forwards}
 .title-note{margin:0;font-size:11px;letter-spacing:.14em;color:var(--paper-3);text-align:center;line-height:1.8;opacity:0;animation:fade 1.6s 2.1s var(--ease) forwards}
 
 /* ---------- hint / toast / big ---------- */
 .hint{position:fixed;left:50%;bottom:calc(var(--sb) + 112px);transform:translate(-50%,8px);width:max-content;max-width:calc(100% - 32px);text-align:center;font-family:var(--display);font-size:15px;letter-spacing:.16em;line-height:1.7;color:var(--paper);text-shadow:0 1px 14px rgba(0,0,0,.6);opacity:0;pointer-events:none;transition:opacity 1.2s var(--ease),transform 1.2s var(--ease);z-index:4}
 .hint.show{opacity:1;transform:translate(-50%,0)}
-.toasts{position:fixed;left:0;right:0;top:calc(var(--st) + 70px);display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;z-index:44;padding:0 16px}
+.toasts{position:fixed;left:0;right:0;top:calc(var(--st) + 100px);display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;z-index:44;padding:0 16px}
 body.photo-open .toasts{top:auto;bottom:calc(var(--sb) + 14px)}
 .toast{max-width:100%;display:flex;flex-direction:column;align-items:center;gap:2px;padding:11px 20px;border-radius:18px;background:var(--sheet);border:1px solid var(--hair);box-shadow:0 10px 40px rgba(0,0,0,.35);text-align:center;animation:tin .7s var(--ease)}
 .toast b{font-family:var(--display);font-weight:500;font-size:15px;letter-spacing:.1em}
@@ -105,6 +115,11 @@ body.photo-open .toasts{top:auto;bottom:calc(var(--sb) + 14px)}
 .toast.out{animation:tout .7s var(--ease) forwards}
 @keyframes tin{from{opacity:0;transform:translateY(-10px) scale(.96)}}
 @keyframes tout{to{opacity:0;transform:translateY(-8px) scale(.97)}}
+.rare{position:fixed;left:0;right:0;top:32%;display:flex;flex-direction:column;align-items:center;gap:10px;pointer-events:none;z-index:6;opacity:0}
+.rare small{font-size:12px;letter-spacing:.5em;padding-left:.5em;color:var(--gold)}
+.rare b{font-family:var(--display);font-weight:500;font-size:clamp(38px,11vw,58px);letter-spacing:.3em;padding-left:.3em;color:var(--paper);text-shadow:0 0 36px rgba(255,214,140,.75)}
+.rare.show{animation:rarein 5s var(--ease) forwards}
+@keyframes rarein{0%{opacity:0;transform:translateY(10px);filter:blur(8px)}18%{opacity:1;transform:none;filter:blur(0)}78%{opacity:1;transform:none;filter:blur(0)}100%{opacity:0;transform:translateY(-6px);filter:blur(4px)}}
 .big{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:6}
 .big span{writing-mode:vertical-rl;font-family:var(--display);font-size:clamp(54px,16vw,88px);letter-spacing:.5em;color:var(--paper);text-shadow:0 0 40px rgba(255,236,210,.55);opacity:0}
 .big.show span{animation:bigin 4.6s var(--ease) forwards}
@@ -173,6 +188,21 @@ body.photo-open .toasts{top:auto;bottom:calc(var(--sb) + 14px)}
 .rare{display:inline-flex;gap:3px}
 .rare i{width:5px;height:5px;border-radius:50%;background:var(--paper-3)}
 .rare i.on{background:var(--gold)}
+
+/* goals */
+.ms{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+.ms li{display:flex;gap:12px;align-items:center;padding:12px 14px;border-radius:14px;border:1px solid var(--hair);background:rgba(236,230,211,.035);transition:border-color .4s,background .4s}
+.ms li.done{border-color:rgba(227,192,124,.45);background:rgba(227,192,124,.07)}
+.ms .ck{flex:none;width:22px;height:22px;border-radius:50%;border:1.5px solid var(--paper-3);display:grid;place-items:center;color:#0c1a21}
+.ms li.done .ck{background:var(--gold);border-color:var(--gold)}
+.ms .ck svg{width:13px;height:13px}
+.ms .m{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.ms .m b{font-weight:400;font-size:14px;letter-spacing:.04em}
+.ms .m small{font-size:11px;color:var(--paper-3);font-variant-numeric:tabular-nums}
+.ms li.done .bar i{background:linear-gradient(90deg,#c9a45e,var(--gold))}
+.reward{margin:12px 0 0;padding:12px 14px;border-radius:14px;border:1px dashed rgba(227,192,124,.45);font-size:12.5px;line-height:1.8;color:var(--paper-2)}
+.reward b{color:var(--gold);font-weight:500}
+.to-zukan{margin-top:20px}
 
 /* settings */
 .row{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:48px;border-bottom:1px solid var(--hair)}
@@ -259,7 +289,7 @@ input{-webkit-user-select:text;user-select:text}
 
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;animation-delay:0s!important;transition-duration:.2s!important}
-  .title-name span,.title-sekki,.start,.title-note{opacity:1}
+  .title-name span,.title-sekki,.start,.title-note,.title-lead{opacity:1}
 }
 @media (min-width:700px){.dock button{width:78px}}
 </style>
@@ -269,7 +299,10 @@ input{-webkit-user-select:text;user-select:text}
 
 <header class="hud" id="hud">
   <div class="sekki" id="sekki"></div>
-  <div class="buds" id="buds" aria-label="蓮の開花"></div>
+  <div class="hud-mid">
+    <div class="buds" id="buds" aria-label="蓮の開花"></div>
+    <button class="goal" id="goalBtn" aria-label="目標を見る"></button>
+  </div>
   <div class="hud-right">
     <button class="icon-btn" id="muteBtn" aria-label="音を消す"></button>
     <button class="icon-btn" id="shotBtn" aria-label="池の写真を撮る"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M4 8.5h3l1.6-2.5h6.8L17 8.5h3v10H4z"/><circle cx="12" cy="13.2" r="3.4"/></svg></button>
@@ -280,6 +313,7 @@ input{-webkit-user-select:text;user-select:text}
 <div class="hint" id="hint" aria-live="polite"></div>
 <div class="toasts" id="toasts" aria-live="polite"></div>
 <div class="big" id="big" aria-hidden="true"><span>満開</span></div>
+<div class="rare" id="rare" aria-hidden="true"><small>めずらしい鯉</small><b id="rareName"></b></div>
 
 <div class="breath" id="breath" aria-live="polite">
   <div class="breath-mid"><b id="bPhase">吸う</b><span id="bCount"></span></div>
@@ -298,6 +332,7 @@ input{-webkit-user-select:text;user-select:text}
     <h1 class="title-name"><span>凪</span><span>の</span><span>池</span></h1>
     <p class="title-sekki" id="tSekki"></p>
   </div>
+  <p class="title-lead">蓮を咲かせて、鯉を集める</p>
   <button class="start" id="startBtn">水面に触れる</button>
   <p class="title-note" id="titleNote">音が出ます。イヤホンがおすすめです</p>
 </div>
@@ -401,7 +436,7 @@ const RARE_LABEL = { 1: 'よく見る', 2: 'ときどき', 3: 'めずらしい' 
 const STAGES = [[0, '稚魚'], [6, '若鯉'], [20, '成鯉'], [45, '大鯉']];
 const stageOf = xp => { let s = 0; for (let i = 0; i < STAGES.length; i++) if (xp >= STAGES[i][0]) s = i; return s; };
 const koiScale = xp => .5 + .62 * (1 - Math.exp(-xp / 22));
-const VERSION = '1.3.1';
+const VERSION = '1.4.0';
 const SUPPORT_URL = 'https://kiyotake1229.github.io/nagi-pond/support.html';
 const POND_MAX = 9;
 const BLOOM_NEED = 4; // つぼみが開くのに必要な波紋の量
@@ -456,6 +491,17 @@ const BREATH = {
   shizumeru: { name: 'しずめる', sub: '4秒ずつ、吸う・とめる・吐く・とめる', steps: [['in', 4], ['hold', 4], ['out', 4], ['rest', 4]] },
 };
 const PHASE_LABEL = { in: '吸う', hold: 'とめる', out: '吐く', rest: 'とめる' };
+// 今日のお題の種類と、求める量の候補（stay は秒）
+const MISSION_TYPES = [
+  { type: 'bloom', needs: [6, 8, 10] },
+  { type: 'bloomColor', needs: [3, 4] },
+  { type: 'full', needs: [1, 2] },
+  { type: 'feed', needs: [10, 15, 20] },
+  { type: 'glide', needs: [15, 25] },
+  { type: 'breath', needs: [1] },
+  { type: 'photo', needs: [1] },
+  { type: 'stay', needs: [300, 480] },
+];
 
 // ================= ネイティブ（iOS アプリ版）との橋渡し。Web版ではすべて使わない =================
 const NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
@@ -464,7 +510,7 @@ const CAP = (window.Capacitor && window.Capacitor.Plugins) || {};
 // ================= 保存 =================
 const KEY = 'nagi.v1';
 const fresh = () => ({
-  v: 1, created: Date.now(), nextId: 1, koi: [], seen: {}, blooms: 0, fulls: 0, days: {}, totalSec: 0, breaths: 0, breathSec: 0, hint: 0,
+  v: 1, created: Date.now(), nextId: 1, koi: [], seen: {}, blooms: 0, fulls: 0, days: {}, totalSec: 0, breaths: 0, breathSec: 0, hint: 0, daily: null, rareBoost: false,
   set: { bgm: true, sfx: true, vib: true, vol: .75, mute: false, scene: 'auto', season: 'auto', shishi: true, lantern: true, bp: 'totonou', blen: 3, notify: false, notifyHour: 21, ignoreMute: false, eco: true },
 });
 const num = (v, def, min = -Infinity, max = Infinity) => { v = Number(v); return Number.isFinite(v) ? clamp(v, min, max) : def; };
@@ -486,6 +532,7 @@ function sanitize(o) {
   d.blooms = Math.floor(num(o.blooms, 0, 0)); d.fulls = Math.floor(num(o.fulls, 0, 0));
   d.breaths = Math.floor(num(o.breaths, 0, 0)); d.breathSec = num(o.breathSec, 0, 0);
   d.hint = Math.floor(num(o.hint, 0, 0, 3));
+  d.daily = sanitizeDaily(o.daily); d.rareBoost = !!o.rareBoost;
   if (o.days && typeof o.days === 'object') for (const [k, v] of Object.entries(o.days)) { const sec = num(v, 0, 0, 86400); if (/^\d{4}-\d{2}-\d{2}$/.test(k) && sec > 0) d.days[k] = sec; }
   // これまでの合計は日ごとの記録とは別に持つ（日ごとの記録は70日で消すため）。古いデータは日ごとの合計から始める
   d.totalSec = num(o.totalSec, Object.values(d.days).reduce((a, b) => a + b, 0), 0);
@@ -507,6 +554,21 @@ function sanitize(o) {
   const limKey = dayKey(lim);
   for (const k of Object.keys(d.days)) if (k < limKey) delete d.days[k];
   return d;
+}
+// 今日のお題の保存データを検査する。おかしければ null（その日のお題を作り直す）
+function sanitizeDaily(o) {
+  if (!o || typeof o !== 'object' || typeof o.day !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(o.day) || !Array.isArray(o.items) || o.items.length !== 3) return null;
+  const items = [];
+  for (const it of o.items) {
+    if (!it || !MISSION_TYPES.some(m => m.type === it.type)) return null;
+    const need = Math.floor(num(it.need, 0, 1, 100000));
+    if (!need) return null;
+    const q = { type: it.type, need, have: num(it.have, 0, 0, need), done: false };
+    q.done = q.have >= need;
+    if (it.type === 'bloomColor') { if (!LOTUS[it.color]) return null; q.color = it.color; }
+    items.push(q);
+  }
+  return { day: o.day, items, reward: !!o.reward && items.every(i => i.done) };
 }
 let hadLocal = false;
 function load() {
@@ -796,6 +858,8 @@ class Koi {
     } else { x = rand(W * .15, W * .85); y = rand(H * .2, H * .8); a = rand(TAU); this.fade = 0; }
     this.angle = a; this.wander = a; this.speed = this.len * .3; this.phase = r() * TAU; this.finPh = r() * TAU;
     this.depth = r() * .8; this.hunger = rand(0, 1.5); this.food = null; this.alpha = o.enter ? 1 : 0;
+    // めずらしい鯉（金色）・はじめて出会う鯉（白）は、しばらく光をまとって泳ぐ
+    this.aura = o.aura === 'rare' ? 14 : o.aura === 'new' ? 6 : 0; this.auraCol = o.aura === 'rare' ? [255, 212, 130] : [214, 232, 255]; this.sparkT = 0;
     this.pts = []; const seg = this.len * .78 / (KN - 1);
     for (let i = 0; i < KN; i++) this.pts.push({ x: x - Math.cos(a) * seg * i, y: y - Math.sin(a) * seg * i });
   }
@@ -803,6 +867,10 @@ class Koi {
   update(dt) {
     const L = this.len, h = this.pts[0];
     this.alpha = Math.min(1, this.alpha + dt * .5);
+    if (this.aura > 0) {
+      this.aura -= dt; this.sparkT -= dt;
+      if (this.sparkT <= 0) { this.sparkT = .09; const q = this.pts[4]; lights.push({ x: q.x + rand(-4, 4), y: q.y + rand(-4, 4), vx: rand(-6, 6), vy: rand(-14, -4), t: 0, life: rand(1.2, 2), r: rand(4, 8), col: this.auraCol }); }
+    }
     this.phase += dt * (2.2 + this.speed / L * 5);
     this.finPh += dt * (1.4 + this.speed / L * 3);
     this.hunger -= dt;
@@ -859,6 +927,7 @@ class Koi {
     p.alive = false; this.food = null; this.hunger = rand(2.5, 6);
     addRipple(p.x, p.y, { R: U * .07, life: 1.3, power: 0, a: .7 });
     if (started) plink(noteAtX(p.x) + 12, { vel: .045, pan: p.x / W * 2 - 1 });
+    mission('feed');
     if (this.visitor) return;
     const before = stageOf(this.d.xp);
     this.d.xp++;
@@ -872,6 +941,7 @@ class Koi {
   draw(ctx) {
     const L = this.len * (1 - this.depth * .07);
     drawKoi(ctx, this.pts, this.look, L, { alpha: this.alpha * (1 - this.depth * .32), shadow: 3 + (1 - this.depth) * 8, finPh: this.finPh, tint: this.depth * .38 });
+    if (this.aura > 0) { const q = this.pts[2]; drawGlow(this.auraCol, q.x, q.y, L * (.85 + .1 * Math.sin(T * 3)), .34 * Math.min(1, this.aura / 3)); }
   }
 }
 
@@ -1049,6 +1119,7 @@ function bloomPad(p) {
   buzz('light');
   renderBuds(true);
   if (S.hint === 1) { S.hint = 2; showHint('五輪すべて咲かせると、新しい鯉がやってきます', 6); }
+  mission('bloom'); mission('bloomColor', 1, p.col);
   saveSoon();
 }
 function updatePads(dt) {
@@ -1124,6 +1195,12 @@ function drawFlower(x, y, size, bloom, col, rot, alpha) {
 // ---------- 満開 ----------
 let gen = 0; // 池をまるごと入れ替えるたびに増やす（入れ替える前に予約した処理を止めるため）
 function rollKind() {
+  // 今日のお題をすべて達成したごほうび: 次の満開は、めずらしい鯉（まだ出会っていない種類を優先）
+  if (S.rareBoost) {
+    S.rareBoost = false;
+    const rares = KINDS.filter(k => k.rare === 3), unseen = rares.filter(k => !S.seen[k.id]);
+    return pick(unseen.length ? unseen : rares).id;
+  }
   const list = KINDS.map(k => ({ k, w: ({ 1: 10, 2: 5, 3: 2 })[k.rare] * (S.seen[k.id] ? 1 : 2.5) }));
   let sum = list.reduce((s, x) => s + x.w, 0), r = Math.random() * sum;
   for (const x of list) { r -= x.w; if (r <= 0) return x.k.id; }
@@ -1138,24 +1215,106 @@ function celebrate() {
   buzz('success');
   for (const p of pads) for (let i = 0; i < 9; i++) lights.push({ x: p.x + rand(-10, 10), y: p.y + rand(-10, 10), vx: rand(-10, 10), vy: rand(-34, -14), t: -rand(0, 1.2), life: rand(3, 5), r: rand(7, 13), col: hex(LOTUS[p.col].a) });
   const kind = rollKind(), isNew = !S.seen[kind], g = gen;
+  const special = KIND[kind].rare === 3 ? 'rare' : isNew ? 'new' : '';
   S.seen[kind] = true;
+  mission('full');
   setTimeout(() => {
     if (g !== gen) return;
+    const name = KIND[kind].name;
     if (S.koi.length < POND_MAX) {
-      const d = newKoiData(kind, 0); S.koi.push(d); koi.push(new Koi(d, { enter: true }));
-      toast(`新しい鯉がやってきました`, `${KIND[kind].name}${isNew ? '　図鑑に登録しました' : ''}`);
+      const d = newKoiData(kind, 0); S.koi.push(d); koi.push(new Koi(d, { enter: true, aura: special }));
+      toast(special === 'rare' ? 'めずらしい鯉がやってきました' : '新しい鯉がやってきました', `${name}${isNew ? '　図鑑に登録しました' : ''}`);
     } else {
       const d = { id: -1, kind, seed: Math.floor(Math.random() * 1e9), xp: 30 };
-      koi.push(new Koi(d, { enter: true, visitor: true, leaveAt: T + 45 }));
-      toast(`${KIND[kind].name}が池を訪れました`, isNew ? '図鑑に登録しました' : 'しばらくすると帰っていきます');
+      koi.push(new Koi(d, { enter: true, visitor: true, leaveAt: T + 45, aura: special }));
+      toast(special === 'rare' ? `めずらしい鯉が池を訪れました` : `${name}が池を訪れました`, special === 'rare' ? `${name}${isNew ? '　図鑑に登録しました' : ''}` : isNew ? '図鑑に登録しました' : 'しばらくすると帰っていきます');
     }
-    save();
+    if (special === 'rare') rareShow(kind);
+    renderGoal(); save();
   }, 2400);
   const u = UNLOCKS.find(u => u.at === S.fulls);
   if (u) setTimeout(() => { if (g !== gen) return; toast(`しつらえ「${u.name}」`, u.desc); if (u.key === 'lantern') buildLanterns(); }, 6200);
-  if (S.hint === 2) S.hint = 3;
+  if (S.hint === 2) { S.hint = 3; setTimeout(() => { if (g === gen) showHint('上の札から、今日のお題と図鑑の進みが見られます', 7); }, 9000); }
   save();
 }
+// めずらしい鯉が来たとき: 名前を大きく出し、特別な和音を鳴らす
+function rareShow(kind) {
+  const el = $('rare'); $('rareName').textContent = KIND[kind].name;
+  setTimeout(() => { el.classList.remove('show'); void el.offsetWidth; el.classList.add('show'); }, 1200);
+  flash = Math.max(flash, .8);
+  if (started) {
+    const n = scaleNotes();
+    [5, 7, 9, 10, 12, 14].forEach((k, i) => bell(n[k], { vel: .1, when: 1.2 + i * .17, dur: 4.6, pan: Math.sin(i * 1.7) * .5 }));
+    for (let i = 0; i < 6; i++) plink(n[14] + 12, { vel: .035, when: 2.4 + i * .11 + Math.random() * .05, pan: rand(-.8, .8) });
+  }
+  setTimeout(() => buzz('success'), 1200);
+}
+
+// ================= 今日のお題 =================
+const strHash = t => { let h = 2166136261; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+// その日のお題を3つ作る。同じ日なら、誰が何度開いても同じお題になる（日付から決める）
+function makeDaily(day) {
+  const r = mulberry(strHash('nagi:' + day)), pool = MISSION_TYPES.slice(), items = [];
+  while (items.length < 3 && pool.length) {
+    const m = pool.splice(Math.floor(r() * pool.length), 1)[0];
+    // 「蓮を咲かせる」と「◯◯の蓮を咲かせる」は同じ日に出さない
+    if ((m.type === 'bloom' && items.some(i => i.type === 'bloomColor')) || (m.type === 'bloomColor' && items.some(i => i.type === 'bloom'))) continue;
+    const it = { type: m.type, need: m.needs[Math.floor(r() * m.needs.length)], have: 0, done: false };
+    if (m.type === 'bloomColor') { const cols = lotusColors(); it.color = cols[Math.floor(r() * cols.length)]; }
+    items.push(it);
+  }
+  return { day, items, reward: false };
+}
+function ensureDaily() {
+  const day = dayKey();
+  if (!S.daily || S.daily.day !== day) { S.daily = makeDaily(day); renderGoal(); saveSoon(); }
+}
+function missionText(it) {
+  switch (it.type) {
+    case 'bloom': return `蓮を${it.need}輪咲かせる`;
+    case 'bloomColor': return `${LOTUS[it.color].name}${it.color === 'pink' ? 'の蓮' : ''}を${it.need}輪咲かせる`;
+    case 'full': return `満開を${it.need}回`;
+    case 'feed': return `鯉に餌を${it.need}粒あげる`;
+    case 'glide': return `水面をなぞって、音を${it.need}回鳴らす`;
+    case 'breath': return '呼吸を1分以上する';
+    case 'photo': return '池の写真を1枚撮る';
+    case 'stay': return `池で${it.need / 60}分すごす`;
+  }
+  return '';
+}
+const missionProgress = it => it.type === 'stay' ? `${Math.floor(it.have / 60)} / ${it.need / 60} 分` : `${Math.floor(it.have)} / ${it.need}`;
+// お題を進める。達成したら知らせ、3つそろったら、ごほうび（次の満開でめずらしい鯉）
+function mission(type, n = 1, color) {
+  if (!started) return;
+  ensureDaily();
+  let changed = false;
+  for (const it of S.daily.items) {
+    if (it.done || it.type !== type || (type === 'bloomColor' && it.color !== color)) continue;
+    it.have = Math.min(it.need, it.have + n);
+    if (it.have >= it.need) {
+      it.done = true; changed = true;
+      toast('お題を達成しました', missionText(it));
+      const k = scene().key; bell(k + 24, { vel: .1, dur: 3 }); bell(k + 28 + (scene().minor ? -1 : 0), { vel: .08, dur: 3, when: .12 }); bell(k + 31, { vel: .08, dur: 3.4, when: .24 });
+      buzz('success');
+    }
+  }
+  if (!changed) return;
+  if (!S.daily.reward && S.daily.items.every(i => i.done)) {
+    S.daily.reward = true; S.rareBoost = true;
+    toast('今日のお題をすべて達成', '次の満開で、めずらしい鯉がやってきます');
+  }
+  renderGoal(true); saveSoon();
+}
+// 上の札: 図鑑の進みと、今日のお題の進み
+function renderGoal(bump) {
+  const el = $('goalBtn'); if (!el) return;
+  const seen = KINDS.filter(k => S.seen[k.id]).length, d = S.daily, done = d ? d.items.filter(i => i.done).length : 0;
+  el.innerHTML = `<span>図鑑 <b>${seen}</b>/${KINDS.length}</span><i></i><span class="g-mission">${d && d.reward ? 'お題 達成' : `お題 <b>${done}</b>/3`}</span>`;
+  el.classList.toggle('done', !!(d && d.reward));
+  el.setAttribute('aria-label', `目標を見る。図鑑 ${seen}/${KINDS.length}種類、今日のお題 ${done}/3`);
+  if (bump) { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
+}
+$('goalBtn').addEventListener('click', () => { audioStart(); openSheet('goals'); });
 
 // ---------- 灯籠 ----------
 function buildLanterns() {
@@ -1204,7 +1363,7 @@ cv.addEventListener('pointermove', e => {
     t.x = e.clientX; t.y = e.clientY;
     addRipple(t.x, t.y, { power: .34, R: U * .2, life: 2.4, a: .8 });
     const now = performance.now();
-    if (now - t.lt > 85) { t.lt = now; bell(noteAtX(t.x), { vel: .085, dur: 1.8, pan: t.x / W * 1.6 - .8 }); }
+    if (now - t.lt > 85) { t.lt = now; bell(noteAtX(t.x), { vel: .085, dur: 1.8, pan: t.x / W * 1.6 - .8 }); mission('glide'); }
   }
 });
 const endTouch = e => touches.delete(e.pointerId);
@@ -1228,6 +1387,7 @@ function update(dt) {
     const se = S.set.season === 'auto' ? sekkiNow().season : S.set.season;
     if (se !== seasonKey) { seasonKey = se; rebuildSeason(); }
     renderSekki();
+    ensureDaily();
   }
   // 波紋
   for (let i = ripples.length - 1; i >= 0; i--) {
@@ -1448,6 +1608,7 @@ function breathFinish(done) {
   $('breath').classList.remove('show');
   releaseWake();
   if (sec >= 20) { S.breaths++; S.breathSec += sec; save(); }
+  if (sec >= 60) mission('breath');
   if (done) { toast('おつかれさまでした', `${Math.round(sec / 60)}分、呼吸をととのえました`); bell(scene().key + 24, { vel: .12, dur: 5 }); bell(scene().key + 31, { vel: .08, dur: 5, when: .3 }); buzz('success'); }
 }
 $('bEnd').addEventListener('click', () => breathFinish(false));
@@ -1461,6 +1622,7 @@ function saveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(save, 1500
 function tickTime(dt) {
   if (document.hidden || sleeping) return;
   const k = dayKey(); S.days[k] = (S.days[k] || 0) + dt; S.totalSec += dt;
+  mission('stay', dt);
   saveAcc += dt; if (saveAcc > 15) { saveAcc = 0; save(); }
 }
 function streak() {
@@ -1564,7 +1726,7 @@ $('dock').addEventListener('pointerdown', poke); $('hud').addEventListener('poin
 let sheetOpen = null, renaming = 0;
 function openSheet(kind) {
   sheetOpen = kind; poke();
-  const titles = { breath: '呼吸', zukan: '図鑑', record: '記録', settings: '設定' };
+  const titles = { breath: '呼吸', zukan: '図鑑', record: '記録', settings: '設定', goals: '目標' };
   $('sheetTitle').textContent = titles[kind];
   renderSheet();
   $('sheet').classList.add('open'); $('scrim').classList.add('open'); $('sheet').setAttribute('aria-hidden', 'false');
@@ -1583,6 +1745,7 @@ function renderSheet() {
   else if (sheetOpen === 'zukan') { b.innerHTML = zukanHTML(); drawThumbs(b); }
   else if (sheetOpen === 'record') b.innerHTML = recordHTML();
   else if (sheetOpen === 'settings') b.innerHTML = settingsHTML();
+  else if (sheetOpen === 'goals') b.innerHTML = goalsHTML();
 }
 document.querySelectorAll('[data-open]').forEach(btn => btn.addEventListener('click', () => { audioStart(); openSheet(btn.dataset.open); }));
 $('sheetClose').addEventListener('click', closeSheet);
@@ -1592,6 +1755,29 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') { if ($('pho
 const seg = (name, cur, opts) => `<div class="seg" data-seg="${name}">${opts.map(([v, l]) => `<button aria-pressed="${String(v) === String(cur)}" data-v="${v}">${l}</button>`).join('')}</div>`;
 const sw = (key, on, label, sub) => `<div class="row"><span>${label}${sub ? `<small>${sub}</small>` : ''}</span><button class="sw" role="switch" aria-checked="${!!on}" aria-label="${label}" data-toggle="${key}"><i></i></button></div>`;
 
+function goalsHTML() {
+  ensureDaily();
+  const d = S.daily, dt = new Date(), seenN = KINDS.filter(k => S.seen[k.id]).length;
+  const check = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+  const items = d.items.map(it => `<li class="${it.done ? 'done' : ''}"><span class="ck">${it.done ? check : ''}</span><div class="m"><b>${missionText(it)}</b><div class="bar"><i style="width:${Math.round(it.have / it.need * 100)}%"></i></div><small>${it.done ? '達成' : missionProgress(it)}</small></div></li>`).join('');
+  const reward = d.reward
+    ? (S.rareBoost ? '<b>今日のお題をすべて達成しました。</b>次の満開で、めずらしい鯉がやってきます' : '<b>今日のお題をすべて達成しました。</b>明日また新しいお題が出ます')
+    : '3つすべて達成すると、<b>次の満開で、めずらしい鯉</b>がやってきます';
+  const left = r => KINDS.filter(k => k.rare === r && !S.seen[k.id]).length;
+  const big = S.koi.filter(k => stageOf(k.xp) === 3).length;
+  const next = UNLOCKS.find(u => S.fulls < u.at);
+  return `<p class="lead">${dt.getMonth() + 1}月${dt.getDate()}日のお題。毎日かわります</p>
+  <ul class="ms">${items}</ul>
+  <p class="reward">${reward}</p>
+  <h3 class="sec">図鑑<small>${seenN} / ${KINDS.length} 種類</small></h3>
+  <div class="bar"><i style="width:${Math.round(seenN / KINDS.length * 100)}%"></i></div>
+  <p class="note">${seenN === KINDS.length ? 'すべての鯉と出会いました' : `まだ見ぬ鯉: よく見る ${left(1)}・ときどき ${left(2)}・めずらしい ${left(3)}`}</p>
+  <h3 class="sec">鯉の育ち<small>大鯉 ${big} / ${S.koi.length} 匹</small></h3>
+  <p class="note">水面をタップすると餌が落ち、鯉が食べて育ちます</p>
+  <h3 class="sec">池のしつらえ<small>${next ? `満開あと${next.at - S.fulls}回で「${next.name}」` : 'すべてそろいました'}</small></h3>
+  <p class="note">満開 ${S.fulls}回</p>
+  <button class="xfer-go to-zukan" data-open-sheet="zukan">図鑑を見る</button>`;
+}
 function breathHTML() {
   return `<p class="lead">池に浮かぶ輪に合わせて、ゆっくり息をします。輪が広がるときに吸い、縮むときに吐きます。</p>
   <div class="bp" role="radiogroup" aria-label="呼吸のしかた">${Object.entries(BREATH).map(([k, v]) => `<button role="radio" aria-checked="${S.set.bp === k}" data-bp="${k}"><b>${v.name}</b><span>${v.sub}</span></button>`).join('')}</div>
@@ -1708,8 +1894,9 @@ function settingsHTML() {
   <p class="about">凪の池 ${VERSION}<br>通信はしません。記録はこの端末の中にだけ保存されます。<br><a href="${SUPPORT_URL}" target="_blank" rel="noopener">サポート・プライバシーポリシー</a></p>`;
 }
 $('sheetBody').addEventListener('click', e => {
-  const t = e.target.closest('[data-toggle],[data-seg] button,[data-action],[data-bp],[data-rename]');
+  const t = e.target.closest('[data-toggle],[data-seg] button,[data-action],[data-bp],[data-rename],[data-open-sheet]');
   if (!t) return;
+  if (t.dataset.openSheet) { openSheet(t.dataset.openSheet); return; }
   if (t.dataset.rename) {
     renaming = +t.dataset.rename; renderSheet();
     const inp = $('rename-' + renaming); if (inp) { inp.focus(); inp.select(); }
@@ -1793,6 +1980,7 @@ function applyState(ns) {
   koi.length = 0; for (const d of S.koi) koi.push(new Koi(d));
   pellets.length = 0; lanterns.length = 0; buildLanterns();
   nextRoundAt = 0; sceneCheck = 0; newRound();
+  ensureDaily(); renderGoal();
   renderMute(); applyAudio(); save();
 }
 function resetAll() {
@@ -1813,6 +2001,7 @@ function takePhoto() {
   const sh = $('shutter'); sh.classList.remove('go'); void sh.offsetWidth; sh.classList.add('go');
   buzz('medium');
   try { buildPhoto(); } catch (e) { toast('写真を作れませんでした', 'もう一度お試しください'); return; }
+  mission('photo');
   $('photoNote').textContent = NATIVE ? '共有から写真に保存することもできます' : '画像を長押しすると保存できます';
   document.body.classList.add('photo-open');
   setTimeout(() => $('photo').classList.add('show'), 260);
@@ -1944,6 +2133,7 @@ buildLanterns();
 newRound();
 renderSekki();
 renderMute();
+ensureDaily(); renderGoal();
 if (NATIVE) {
   initNativeStore();
   if (CAP.StatusBar) { try { quiet(CAP.StatusBar.setStyle({ style: 'DARK' })); } catch (e) {} }
@@ -1960,7 +2150,7 @@ function frameGap(now) {
   const full = 1000 / 60;
   if (!S.set.eco) return full;
   // 呼吸の輪・満開の演出・写真の撮影中は、なめらかさを優先する
-  if (breath || flash > 0 || (round && round.done && !round.celebrated)) return full;
+  if (breath || flash > 0 || (round && round.done && !round.celebrated) || koi.some(k => k.aura > 0)) return full;
   const idle = now - lastInput;
   return idle > ECO_DEEP ? 1000 / 20 : idle > ECO_AFTER ? 1000 / 30 : full;
 }
@@ -1997,6 +2187,7 @@ window.__nagi = {
   get round() { return round; }, get breath() { return breath; }, get sleeping() { return sleeping; }, get T() { return T; }, get gen() { return gen; },
   get drawCount() { return drawCount; }, get unmuteEl() { return unmuteEl; }, IS_IOS, applySilentMode,
   idleFor(ms) { lastInput = performance.now() - ms; }, // 計測用: ms ミリ秒触っていないことにする
+  mission, makeDaily, ensureDaily, goalsHTML, missionText, rollKind,
   step(dt) { update(dt); draw(); }, resize, sanitize, exportCode, parseCode, applyState, resetAll, streak, recordHTML, settingsHTML, zukanHTML, sekkiNow, scheduleNotify, setSleep, wakeUp, initNativeStore,
 };
 })();
