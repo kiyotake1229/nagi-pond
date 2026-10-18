@@ -17,13 +17,15 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // App Store Connect で求められる大きさ（w × h × dpr が画像のピクセル数）。
 // iw / ih はアプリが使える領域（上のステータスバーと下のホームバーを除いた大きさ）
-const DEVICES = [
+const ALL_DEVICES = [
   { name: 'iphone-6.9', w: 440, h: 956, dpr: 3, iw: 440, ih: 956 - 62 - 34 },
   { name: 'iphone-6.5', w: 428, h: 926, dpr: 3, iw: 428, ih: 926 - 44 - 34 },
   { name: 'iphone-5.5', w: 414, h: 736, dpr: 3, iw: 414, ih: 736 - 20 },
   { name: 'ipad-13', w: 1032, h: 1376, dpr: 2, iw: 1032, ih: 1376 - 24 - 20 },
 ];
-const SCENES = ['pond', 'bloom', 'rare', 'goals', 'moon', 'zukan', 'breath', 'season'];
+// NAGI_SCENES=rain,yukimi NAGI_DEVICES=iphone-6.9 のように、撮る場面と端末を絞れる（見た目の確認用）
+const DEVICES = process.env.NAGI_DEVICES ? ALL_DEVICES.filter(d => process.env.NAGI_DEVICES.split(',').includes(d.name)) : ALL_DEVICES;
+const SCENES = process.env.NAGI_SCENES ? process.env.NAGI_SCENES.split(',') : ['pond', 'bloom', 'rare', 'goals', 'moon', 'zukan', 'breath', 'season'];
 
 // ---- アプリのフォルダを配る小さな Web サーバー ----
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml' };

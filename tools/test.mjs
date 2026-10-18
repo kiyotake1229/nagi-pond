@@ -109,7 +109,7 @@ function makeApp({ storage: preset, native, w = 390, h = 844, prefs: prefsPreset
       Haptics: { impact: async () => {}, notification: async () => {} },
       LocalNotifications: {
         requestPermissions: async () => ({ display: 'granted' }),
-        schedule: async ({ notifications }) => { scheduled.push(...notifications); },
+        schedule: async ({ notifications }) => { scheduled.calls = (scheduled.calls || 0) + 1; scheduled.push(...notifications); },
         cancel: async ({ notifications }) => { const ids = new Set(notifications.map(n => n.id)); for (let i = scheduled.length - 1; i >= 0; i--) if (ids.has(scheduled[i].id)) scheduled.splice(i, 1); },
       },
       StatusBar: { setStyle: async () => {} },
@@ -334,7 +334,7 @@ await test('iOS: 夜のお知らせは、先の14日分を選んだ時刻・節�
   check(list.length === 14, `予約が ${list.length} 件`);
   check(new Set(list.map(n => n.id)).size === 14 && list.every(n => n.id >= 7000 && n.id < 7014), '通知の番号がおかしい');
   check(list.every(n => n.schedule.at.getHours() === 22 && n.schedule.at.getTime() > Date.now()), '時刻か日付がおかしい');
-  check(list.every(n => /のころ。/.test(n.body)), '文面に節気が入っていない');
+  check(list.every(n => /のころ。|今日のお題 あと/.test(n.body)), '文面に節気かお題の残りが入っていない');
   await app.N.scheduleNotify(); await app.flush();
   check(app.scheduled.length === 14, `予約しなおすと ${app.scheduled.length} 件（重なっている）`);
 });
@@ -580,7 +580,7 @@ await test('お題の連続: 昨日まで6日続いていれば、今日達成�
   check(N.S.set.scene === 'moon' && N.settingsHTML().includes('data-v="moon"'), '満月が解放されない');
   app.run(22);
   check(N.sceneKey === 'moon', `景色が ${N.sceneKey}`);
-  check(N.goalsHTML().includes('景色「満月」が選べます'), '目標の画面に解放が出ない');
+  check(N.goalsHTML().includes('<b>満月</b><small>選べます</small>'), '目標の画面に解放が出ない');
   app.run(30); // 満月の景色を描いても止まらない
   check(app.errors.length === 0, `例外 ${app.errors[0]}`);
 });
@@ -641,6 +641,66 @@ await test('新しいお題: 名前を付ける・育てる・ひとつの波紋
   N.mission('breath', 1);
   check(N.S.daily.items[1].done, '呼吸あわせて3分 が進まない');
   check(N.missionText(N.S.daily.items[0]) === '波紋でもみじを10枚ゆらす' && N.missionText(N.S.daily.items[1]) === '呼吸をあわせて3分する', '文面がおかしい');
+});
+
+// ---- 雨の池・雪見灯籠・お知らせとお題 ----
+await test('連続のごほうび: 14日で「雨の池」、30日で「雪見灯籠」が解放され、設定の「特別な景色」に出る', () => {
+  const app = makeApp({ storage: { [KEY]: almostDone({ mstreak: { count: 13, last: daysAgo(1), best: 13 } }) } }); const { N } = app;
+  N.start(); app.run(1);
+  check(N.sceneOpen('moon') && !N.sceneOpen('rain') && !N.settingsHTML().includes('data-v="rain"'), '13日なのに雨の池が選べる、または満月が選べない');
+  N.takePhoto(); app.advance(300);
+  check(N.S.mstreak.count === 14 && N.sceneOpen('rain') && N.S.set.scene === 'rain', `14日目で雨の池にならない ${JSON.stringify(N.S.mstreak)} ${N.S.set.scene}`);
+  check(N.settingsHTML().includes('data-v="rain"') && N.settingsHTML().includes('特別な景色') && !N.settingsHTML().includes('data-v="yukimi"'), '設定に雨の池が出ない、または雪見灯籠まで出る');
+  check(N.goalsHTML().includes('<b>雨の池</b><small>選べます</small>') && N.goalsHTML().includes('<b>雪見灯籠</b><small>あと16日</small>'), '目標の画面のごほうびの一覧がおかしい');
+  const app2 = makeApp({ storage: { [KEY]: JSON.stringify({ koi: [{ kind: 'kohaku', id: 1 }], mstreak: { count: 0, last: '', best: 30 } }) } });
+  check(['moon', 'rain', 'yukimi'].every(k => app2.N.sceneOpen(k) && app2.N.settingsHTML().includes(`data-v="${k}"`)), '30日で3つとも選べない');
+});
+
+await test('雨の池・雪見灯籠: 描いても止まらず、雨の輪や雪が増え続けない。景色を戻すと消える', () => {
+  for (const scene of ['rain', 'yukimi']) {
+    const app = makeApp({ storage: { [KEY]: JSON.stringify({ koi: [{ kind: 'kohaku', id: 1 }], mstreak: { count: 0, last: '', best: 30 }, set: { scene } }) } }); const { N } = app;
+    N.start(); let maxRings = 0;
+    app.run(40, 1 / 30, () => { maxRings = Math.max(maxRings, N.rainRings.length); });
+    check(app.errors.length === 0, `${scene}: 例外 ${app.errors[0]}`);
+    check(N.P[scene] > .95 && maxRings > (scene === 'rain' ? 5 : 0) && maxRings <= 70, `${scene}: 景色の強さ ${N.P[scene].toFixed(2)}・輪 ${maxRings}`);
+    if (scene === 'yukimi') check(N.flakes.length > 30, `雪が ${N.flakes.length} 粒`);
+    check(N.S.blooms === 0, `${scene}: 雨や雪で蓮が咲いた`);
+    N.S.set.scene = 'night'; app.run(40);
+    check(N.P[scene] < .05 && N.flakes.length === 0, `${scene}: 景色を戻しても残っている`);
+  }
+});
+
+await test('おまかせ: 梅雨のころの日中はときどき雨の池、冬の夜はときどき雪見灯籠、満月の夜は満月（解放していれば）', () => {
+  const N = makeApp({ storage: { [KEY]: JSON.stringify({ koi: [{ kind: 'kohaku', id: 1 }], mstreak: { count: 0, last: '', best: 30 } }) } }).N;
+  const tsuyu = [], winter = [];
+  for (let d = 11; d <= 30; d++) tsuyu.push(N.autoScene(new Date(2026, 5, d, 12)));
+  check(tsuyu.includes('rain') && tsuyu.includes('day'), `梅雨の昼が ${[...new Set(tsuyu)]}`);
+  check([...Array(20)].every((_, i) => N.autoScene(new Date(2026, 5, 11 + i, 23)) !== 'rain'), '梅雨の夜に雨の池になった');
+  check([...Array(30)].every((_, i) => N.autoScene(new Date(2026, 8, 1 + i, 12)) !== 'rain'), '梅雨でないのに雨の池になった');
+  for (let d = 1; d <= 30; d++) winter.push(N.autoScene(new Date(2026, 11, d, 22)));
+  check(winter.includes('yukimi') && winter.includes('night'), `冬の夜が ${[...new Set(winter)]}`);
+  check(N.autoScene(new Date(2025, 9, 7, 22)) === 'moon', '満月の夜が満月にならない');
+  const fresh = makeApp().N;
+  check(fresh.autoScene(new Date(2026, 5, 12, 12)) === 'day' && fresh.autoScene(new Date(2026, 11, 3, 22)) === 'night', '解放していないのに特別な景色になった');
+});
+
+await test('iOS: 今日のお知らせに、お題の残りと連続日数が入り、お題が進むと書き直される', async () => {
+  const st = almostDone({ set: { notify: true, notifyHour: 23 }, mstreak: { count: 4, last: daysAgo(1), best: 4 } });
+  const app = makeApp({ native: true, storage: { [KEY]: st } }); const { N } = app;
+  for (let i = 0; i < 4; i++) await app.flush();
+  // 今日の分の文面は、時刻に関係なく作れる
+  const tonight = new Date(); tonight.setHours(23, 0, 0, 0);
+  check(N.notifyBody(tonight, 0) === '今日のお題 あと1つ。連続5日目がかかっています', `今日の文面が「${N.notifyBody(tonight, 0)}」`);
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); tomorrow.setHours(23, 0, 0, 0);
+  check(/のころ。.+。今日のお題が届いています$/.test(N.notifyBody(tomorrow, 1)), `明日の文面が「${N.notifyBody(tomorrow, 1)}」`);
+  const callsBefore = app.scheduled.calls || 0;
+  N.start(); N.takePhoto(); app.advance(2500); for (let i = 0; i < 4; i++) await app.flush();
+  check((app.scheduled.calls || 0) > callsBefore, 'お題が進んでも、お知らせを予約しなおしていない');
+  check(/今日のお題はすべて達成しました/.test(N.notifyBody(tonight, 0)), `達成後の文面が「${N.notifyBody(tonight, 0)}」`);
+  // 予約しなおされていること（今日の23時がまだ先なら、その文面も入れ替わっている）
+  const todays = app.scheduled.filter(n => n.schedule.at.toDateString() === new Date().toDateString());
+  if (tonight.getTime() > Date.now() + 60000) check(todays.length === 1 && /すべて達成/.test(todays[0].body), `予約された今日の文面が「${todays[0] && todays[0].body}」`);
+  check(app.scheduled.length === 14, `予約が ${app.scheduled.length} 件`);
 });
 
 // ---- 結果 ----
