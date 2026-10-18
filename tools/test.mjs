@@ -565,6 +565,84 @@ await test('上の札と目標の画面: 図鑑の数・お題の進み・ごほ
   check(html.includes('めずらしい鯉') && html.includes('図鑑') && html.includes('池のしつらえ'), '目標の画面の項目が足りない');
 });
 
+// ---- お題の連続・満月・新しいお題 ----
+const dk = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const daysAgo = n => { const d = new Date(); d.setDate(d.getDate() - n); return dk(d); };
+// 今日のお題を、あと写真1枚で3つそろう状態にした保存データ
+const almostDone = extra => JSON.stringify(Object.assign({ koi: [{ kind: 'kohaku', id: 1 }], hint: 3, daily: { day: daysAgo(0), items: [{ type: 'bloom', need: 5, have: 5 }, { type: 'feed', need: 3, have: 3 }, { type: 'photo', need: 1, have: 0 }] } }, extra));
+
+await test('お題の連続: 昨日まで6日続いていれば、今日達成で7日。景色「満月」が解放され、景色が満月になる', () => {
+  const app = makeApp({ storage: { [KEY]: almostDone({ mstreak: { count: 6, last: daysAgo(1), best: 6 } }) } }); const { N } = app;
+  N.start(); app.run(1);
+  check(N.streakNow() === 6 && !N.settingsHTML().includes('data-v="moon"'), '解放前なのに満月が選べる、または連続日数が違う');
+  N.takePhoto(); app.advance(300);
+  check(N.S.mstreak.count === 7 && N.S.mstreak.best === 7 && N.S.mstreak.last === daysAgo(0), `連続が ${JSON.stringify(N.S.mstreak)}`);
+  check(N.S.set.scene === 'moon' && N.settingsHTML().includes('data-v="moon"'), '満月が解放されない');
+  app.run(22);
+  check(N.sceneKey === 'moon', `景色が ${N.sceneKey}`);
+  check(N.goalsHTML().includes('景色「満月」が選べます'), '目標の画面に解放が出ない');
+  app.run(30); // 満月の景色を描いても止まらない
+  check(app.errors.length === 0, `例外 ${app.errors[0]}`);
+});
+
+await test('お題の連続: 間が空いたら1日目から。同じ日に何度達成しても増えない。途切れたら「いま」は0日', () => {
+  const app = makeApp({ storage: { [KEY]: almostDone({ mstreak: { count: 5, last: daysAgo(3), best: 5 } }) } }); const { N } = app;
+  N.start(); app.run(1);
+  check(N.streakNow() === 0, `3日前で途切れているのに ${N.streakNow()}日`);
+  N.takePhoto(); app.advance(300);
+  check(N.S.mstreak.count === 1 && N.S.mstreak.best === 5 && N.S.set.scene === 'auto', `間が空いた後が ${JSON.stringify(N.S.mstreak)}`);
+  N.S.daily.reward = false; N.S.daily.items[2].done = false; N.S.daily.items[2].have = 0; // もう一度そろえる
+  N.takePhoto(); app.advance(300);
+  check(N.S.mstreak.count === 1, `同じ日に2回数えた（${N.S.mstreak.count}日）`);
+  check(N.recordHTML().includes('今日のお題の連続 1日（いちばん長く 5日）'), '記録の画面に連続が出ない');
+});
+
+await test('満月: 月齢の計算が実際の満月・新月と合い、満月のころの夜だけ「おまかせ」が満月になる（解放していれば）', () => {
+  const app = makeApp({ storage: { [KEY]: JSON.stringify({ koi: [{ kind: 'kohaku', id: 1 }], mstreak: { count: 0, last: '', best: 7 } }) } }); const { N } = app;
+  for (const [y, m, d] of [[2024, 10, 17], [2025, 10, 7], [2026, 1, 3]]) { const a = N.moonAge(new Date(Date.UTC(y, m - 1, d, 12))); check(a > 13.5 && a < 16, `${y}/${m}/${d}（満月）の月齢が ${a.toFixed(2)}`); }
+  check(!N.isFullMoon(new Date(Date.UTC(2025, 8, 21, 20))), '新月を満月と判定した');
+  check(N.autoScene(new Date(2025, 9, 7, 22)) === 'moon', '満月の夜なのに満月にならない');
+  check(N.autoScene(new Date(2025, 9, 7, 12)) === 'day', '満月の日の昼が昼にならない');
+  check(N.autoScene(new Date(2025, 8, 21, 22)) === 'night', '新月の夜が夜にならない');
+  const app2 = makeApp();
+  check(app2.N.autoScene(new Date(2025, 9, 7, 22)) === 'night', '解放していないのに満月になる');
+});
+
+await test('新しいお題: できない日には出さない（名前の無い鯉がいない／全部大鯉／夏・冬）', () => {
+  const named = makeApp({ storage: { [KEY]: JSON.stringify({ koi: [{ kind: 'kohaku', id: 1, name: 'あ', xp: 60 }, { kind: 'ogon', id: 2, name: 'い', xp: 90 }], set: { season: 'summer' } }) } }).N;
+  for (let i = 0; i < 300; i++) {
+    const types = named.makeDaily(`2027-01-01x${i}`).items.map(x => x.type);
+    check(!types.includes('name') && !types.includes('grow') && !types.includes('sway'), `できないお題が出た ${types}`);
+  }
+  const fresh = makeApp({ storage: { [KEY]: JSON.stringify({ koi: [{ kind: 'kohaku', id: 1 }], set: { season: 'autumn' } }) } }).N;
+  const seen = new Set();
+  for (let i = 0; i < 300; i++) fresh.makeDaily(`2027-02-01x${i}`).items.forEach(x => seen.add(x.type));
+  for (const t of ['name', 'grow', 'multi', 'sway', 'breath']) check(seen.has(t), `「${t}」のお題が一度も出ない`);
+});
+
+await test('新しいお題: 名前を付ける・育てる・ひとつの波紋でつぼみ3つ・もみじをゆらす・呼吸あわせて3分 が進む', () => {
+  const items = [{ type: 'name', need: 1, have: 0 }, { type: 'grow', need: 1, have: 0 }, { type: 'multi', need: 1, have: 0 }];
+  const app = makeApp({ storage: { [KEY]: JSON.stringify({ koi: [{ kind: 'kohaku', id: 1, xp: 5 }, { kind: 'ogon', id: 2, xp: 30 }], hint: 3, set: { season: 'autumn' }, daily: { day: daysAgo(0), items } }) } }); const { N } = app;
+  N.start(); app.run(2.5);
+  N.renameKoi(1, 'もみじ');
+  check(N.S.daily.items[0].done, '名前のお題が進まない');
+  N.koi.find(k => k.d.id === 1).eat({ x: 100, y: 100, alive: true });
+  check(N.S.daily.items[1].done, `育てるお題が進まない（粒数 ${N.S.koi[0].xp}）`);
+  // つぼみ3つを近くに寄せて、その真ん中を触る
+  N.pads.slice(0, 3).forEach((p, i) => { p.x = 160 + i * 30; p.y = 400 + (i % 2) * 25; p.vx = p.vy = 0; p.energy = 0; });
+  N.tapAt(190, 412); app.run(3);
+  check(N.S.daily.items[2].done && N.S.daily.reward, 'ひとつの波紋でつぼみ3つ のお題が進まない');
+  // もみじと呼吸
+  N.S.daily = { day: daysAgo(0), items: [{ type: 'sway', need: 10, have: 0, done: false, what: 'もみじ' }, { type: 'breath', need: 3, have: 0, done: false }, { type: 'photo', need: 1, have: 0, done: false }], reward: false };
+  for (let i = 0; i < 40 && !N.S.daily.items[0].done; i++) { const f = N.floaters[i % N.floaters.length]; N.tapAt(f.x, f.y); app.run(.8); }
+  check(N.S.daily.items[0].done, `もみじのお題が ${N.S.daily.items[0].have}/10`);
+  N.mission('breath', 1); N.mission('breath', 1);
+  check(!N.S.daily.items[1].done && N.S.daily.items[1].have === 2, '呼吸あわせて3分 が2分で終わった');
+  N.mission('breath', 1);
+  check(N.S.daily.items[1].done, '呼吸あわせて3分 が進まない');
+  check(N.missionText(N.S.daily.items[0]) === '波紋でもみじを10枚ゆらす' && N.missionText(N.S.daily.items[1]) === '呼吸をあわせて3分する', '文面がおかしい');
+});
+
 // ---- 結果 ----
 let fail = 0;
 for (const [ok, name, msg, ms] of results) {

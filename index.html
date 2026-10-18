@@ -203,6 +203,8 @@ body.photo-open .toasts{top:auto;bottom:calc(var(--sb) + 14px)}
 .reward{margin:12px 0 0;padding:12px 14px;border-radius:14px;border:1px dashed rgba(227,192,124,.45);font-size:12.5px;line-height:1.8;color:var(--paper-2)}
 .reward b{color:var(--gold);font-weight:500}
 .to-zukan{margin-top:20px}
+.streak{margin:0 0 8px;font-size:12px;color:var(--paper-2);letter-spacing:.06em}
+.streak b{font-family:var(--display);font-weight:500;font-size:30px;color:var(--paper);margin-right:4px;font-variant-numeric:tabular-nums}
 
 /* settings */
 .row{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:48px;border-bottom:1px solid var(--hair)}
@@ -221,7 +223,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 input[type=range]::-moz-range-track{height:4px;border-radius:4px;background:rgba(236,230,211,.2)}
 input[type=range]::-moz-range-thumb{width:22px;height:22px;border:0;border-radius:50%;background:var(--paper)}
 .seg{display:flex;padding:4px;border-radius:14px;background:rgba(236,230,211,.06);border:1px solid var(--hair);gap:2px}
-.seg button{flex:1;min-width:0;padding:9px 0;border-radius:10px;font-size:13px;letter-spacing:.08em;color:var(--paper-2);transition:background .3s,color .3s}
+.seg button{flex:1;min-width:0;padding:9px 0;border-radius:10px;font-size:13px;letter-spacing:.04em;color:var(--paper-2);transition:background .3s,color .3s}
 .seg button[aria-pressed="true"]{background:rgba(236,230,211,.9);color:#0c1a21}
 .danger{width:100%;padding:13px;border-radius:14px;border:1px solid rgba(232,97,60,.45);color:#f2a088;font-size:14px;letter-spacing:.1em;transition:background .3s}
 .danger.armed{background:rgba(232,97,60,.85);color:#fff}
@@ -413,8 +415,16 @@ const SCENES = {
   dawn: { name: '朝', top: '#9db2bb', bot: '#4c6b78', glow: '#fff3da', gx: .28, gy: .15, ga: .6, rip: '#ffffff', ripS: '#28434f', pad: '#47704f', padHi: '#8db58a', fog: .6, dark: .1, key: 55, minor: false },
   day: { name: '昼', top: '#3b827d', bot: '#0f3533', glow: '#fffbe6', gx: .62, gy: .12, ga: .5, rip: '#eafcf6', ripS: '#05201f', pad: '#3c6c39', padHi: '#7fae68', fog: 0, dark: 0, key: 48, minor: false },
   dusk: { name: '夕', top: '#573559', bot: '#15112a', glow: '#ffb27a', gx: .26, gy: .22, ga: .65, rip: '#ffe2cf', ripS: '#120a1a', pad: '#2b392c', padHi: '#61724f', fog: 0, dark: .75, key: 45, minor: true },
+  // お題を7日続けて達成すると選べる特別な景色。水面に大きな満月が映り、星がまたたく
+  moon: { name: '満月', top: '#16233f', bot: '#03060d', glow: '#fbf5de', gx: .5, gy: .19, ga: .95, rip: '#e4ecff', ripS: '#000000', pad: '#1b3431', padHi: '#4f786b', fog: 0, dark: 1, key: 53, minor: false, moon: 1 },
 };
-const todNow = () => { const h = new Date().getHours(); return h >= 5 && h < 9 ? 'dawn' : h >= 9 && h < 16 ? 'day' : h >= 16 && h < 19 ? 'dusk' : 'night'; };
+const todNow = (d = new Date()) => { const h = d.getHours(); return h >= 5 && h < 9 ? 'dawn' : h >= 9 && h < 16 ? 'day' : h >= 16 && h < 19 ? 'dusk' : 'night'; };
+// 月齢（新月から何日か）。平均の満ち欠けの長さで計算する（実際の満月とのずれは半日ほど）
+const moonAge = (d = new Date()) => { const syn = 29.530588853, ref = Date.UTC(2000, 0, 6, 18, 14); return (((d.getTime() - ref) / 864e5) % syn + syn) % syn; };
+const isFullMoon = (d = new Date()) => { const a = moonAge(d); return a > 13.5 && a < 16; };
+const moonOpen = () => S.mstreak.best >= 7;
+// おまかせの景色: 時刻で決める。「満月」を解放していれば、満月のころの夜は満月の池にする
+const autoScene = (d = new Date()) => { const t = todNow(d); return t === 'night' && moonOpen() && isFullMoon(d) ? 'moon' : t; };
 
 // ================= 鯉 =================
 const KINDS = [
@@ -436,7 +446,7 @@ const RARE_LABEL = { 1: 'よく見る', 2: 'ときどき', 3: 'めずらしい' 
 const STAGES = [[0, '稚魚'], [6, '若鯉'], [20, '成鯉'], [45, '大鯉']];
 const stageOf = xp => { let s = 0; for (let i = 0; i < STAGES.length; i++) if (xp >= STAGES[i][0]) s = i; return s; };
 const koiScale = xp => .5 + .62 * (1 - Math.exp(-xp / 22));
-const VERSION = '1.4.0';
+const VERSION = '1.5.0';
 const SUPPORT_URL = 'https://kiyotake1229.github.io/nagi-pond/support.html';
 const POND_MAX = 9;
 const BLOOM_NEED = 4; // つぼみが開くのに必要な波紋の量
@@ -492,15 +502,20 @@ const BREATH = {
 };
 const PHASE_LABEL = { in: '吸う', hold: 'とめる', out: '吐く', rest: 'とめる' };
 // 今日のお題の種類と、求める量の候補（stay は秒）
+// ok があるものは、その日にできるときだけ出す（例: 名前の無い鯉がいないなら「名前を付ける」は出さない）
 const MISSION_TYPES = [
   { type: 'bloom', needs: [6, 8, 10] },
   { type: 'bloomColor', needs: [3, 4] },
   { type: 'full', needs: [1, 2] },
   { type: 'feed', needs: [10, 15, 20] },
   { type: 'glide', needs: [15, 25] },
-  { type: 'breath', needs: [1] },
+  { type: 'breath', needs: [1, 3] },
   { type: 'photo', needs: [1] },
   { type: 'stay', needs: [300, 480] },
+  { type: 'name', needs: [1], ok: () => S.koi.some(k => !k.name) },
+  { type: 'grow', needs: [1], ok: () => S.koi.some(k => stageOf(k.xp) < 3) },
+  { type: 'multi', needs: [1, 2] },
+  { type: 'sway', needs: [10, 20], ok: () => seasonKey === 'spring' || seasonKey === 'autumn' },
 ];
 
 // ================= ネイティブ（iOS アプリ版）との橋渡し。Web版ではすべて使わない =================
@@ -510,7 +525,7 @@ const CAP = (window.Capacitor && window.Capacitor.Plugins) || {};
 // ================= 保存 =================
 const KEY = 'nagi.v1';
 const fresh = () => ({
-  v: 1, created: Date.now(), nextId: 1, koi: [], seen: {}, blooms: 0, fulls: 0, days: {}, totalSec: 0, breaths: 0, breathSec: 0, hint: 0, daily: null, rareBoost: false,
+  v: 1, created: Date.now(), nextId: 1, koi: [], seen: {}, blooms: 0, fulls: 0, days: {}, totalSec: 0, breaths: 0, breathSec: 0, hint: 0, daily: null, rareBoost: false, mstreak: { count: 0, last: '', best: 0 },
   set: { bgm: true, sfx: true, vib: true, vol: .75, mute: false, scene: 'auto', season: 'auto', shishi: true, lantern: true, bp: 'totonou', blen: 3, notify: false, notifyHour: 21, ignoreMute: false, eco: true },
 });
 const num = (v, def, min = -Infinity, max = Infinity) => { v = Number(v); return Number.isFinite(v) ? clamp(v, min, max) : def; };
@@ -533,6 +548,9 @@ function sanitize(o) {
   d.breaths = Math.floor(num(o.breaths, 0, 0)); d.breathSec = num(o.breathSec, 0, 0);
   d.hint = Math.floor(num(o.hint, 0, 0, 3));
   d.daily = sanitizeDaily(o.daily); d.rareBoost = !!o.rareBoost;
+  const ms = o.mstreak && typeof o.mstreak === 'object' ? o.mstreak : {};
+  d.mstreak = { count: Math.floor(num(ms.count, 0, 0, 1e4)), last: typeof ms.last === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(ms.last) ? ms.last : '', best: Math.floor(num(ms.best, 0, 0, 1e4)) };
+  d.mstreak.best = Math.max(d.mstreak.best, d.mstreak.count);
   if (o.days && typeof o.days === 'object') for (const [k, v] of Object.entries(o.days)) { const sec = num(v, 0, 0, 86400); if (/^\d{4}-\d{2}-\d{2}$/.test(k) && sec > 0) d.days[k] = sec; }
   // これまでの合計は日ごとの記録とは別に持つ（日ごとの記録は70日で消すため）。古いデータは日ごとの合計から始める
   d.totalSec = num(o.totalSec, Object.values(d.days).reduce((a, b) => a + b, 0), 0);
@@ -566,6 +584,7 @@ function sanitizeDaily(o) {
     const q = { type: it.type, need, have: num(it.have, 0, 0, need), done: false };
     q.done = q.have >= need;
     if (it.type === 'bloomColor') { if (!LOTUS[it.color]) return null; q.color = it.color; }
+    if (it.type === 'sway') q.what = it.what === '花びら' ? '花びら' : 'もみじ';
     items.push(q);
   }
   return { day: o.day, items, reward: !!o.reward && items.every(i => i.done) };
@@ -780,9 +799,9 @@ const cv = $('pond'), c = cv.getContext('2d');
 let W = 0, H = 0, U = 0, DPR = 1, baseLen = 80;
 let vignette = null, fogTex = null;
 let T = 0;
-let sceneKey = S.set.scene === 'auto' ? todNow() : S.set.scene;
+let sceneKey = S.set.scene === 'auto' ? autoScene() : S.set.scene;
 let seasonKey = S.set.season === 'auto' ? sekkiNow().season : S.set.season;
-function palOf(k) { const s = SCENES[k]; return { top: hex(s.top), bot: hex(s.bot), glow: hex(s.glow), rip: hex(s.rip), ripS: hex(s.ripS), pad: hex(s.pad), padHi: hex(s.padHi), gx: s.gx, gy: s.gy, ga: s.ga, fog: s.fog, dark: s.dark }; }
+function palOf(k) { const s = SCENES[k]; return { top: hex(s.top), bot: hex(s.bot), glow: hex(s.glow), rip: hex(s.rip), ripS: hex(s.ripS), pad: hex(s.pad), padHi: hex(s.padHi), gx: s.gx, gy: s.gy, ga: s.ga, fog: s.fog, dark: s.dark, moon: s.moon || 0 }; }
 let P = palOf(sceneKey), PT = palOf(sceneKey);
 function stepPal(dt) {
   const k = 1 - Math.exp(-dt * .7);
@@ -831,11 +850,12 @@ const padRadius = () => clamp(U * .078, 22, 44);
 // ================= 世界 =================
 const ripples = [], pellets = [], koi = [], pads = [], floaters = [], air = [], lights = [], lanterns = [];
 let rippleId = 0;
+const STARS = (() => { const r = mulberry(7); return Array.from({ length: 70 }, () => ({ x: r(), y: r() * .62, s: r() < .15 ? 2 : 1.2, a: .3 + r() * .5, ph: r() * TAU, sp: .6 + r() * 1.8 })); })();
 const flow = { a: rand(TAU), x: 0, y: 0 };
 let flash = 0;
 
 function addRipple(x, y, o = {}) {
-  const r = { x, y, t: 0, life: o.life || 4.2, R: o.R || U * .52, power: o.power === undefined ? 1 : o.power, w: o.w || 1, a: o.a || 1, hit: new Set(), id: rippleId++ };
+  const r = { x, y, t: 0, life: o.life || 4.2, R: o.R || U * .52, power: o.power === undefined ? 1 : o.power, w: o.w || 1, a: o.a || 1, hit: new Set(), id: rippleId++, player: !!o.player, padHits: 0 };
   ripples.push(r); if (ripples.length > 56) ripples.shift();
   return r;
 }
@@ -933,6 +953,7 @@ class Koi {
     this.d.xp++;
     const after = stageOf(this.d.xp);
     if (after > before) {
+      mission('grow');
       toast(`${koiLabel(this.d)}が${STAGES[after][1]}に育ちました`, after === 3 ? 'これ以上は大きくなりません' : (this.d.name ? KIND[this.d.kind].name : '図鑑で名前を付けられます'));
       bell(scene().key + 31, { vel: .1, dur: 3 }); bell(scene().key + 36, { vel: .08, dur: 3, when: .14 }); buzz('medium');
     }
@@ -1257,10 +1278,12 @@ function makeDaily(day) {
   const r = mulberry(strHash('nagi:' + day)), pool = MISSION_TYPES.slice(), items = [];
   while (items.length < 3 && pool.length) {
     const m = pool.splice(Math.floor(r() * pool.length), 1)[0];
+    if (m.ok && !m.ok()) continue;
     // 「蓮を咲かせる」と「◯◯の蓮を咲かせる」は同じ日に出さない
     if ((m.type === 'bloom' && items.some(i => i.type === 'bloomColor')) || (m.type === 'bloomColor' && items.some(i => i.type === 'bloom'))) continue;
     const it = { type: m.type, need: m.needs[Math.floor(r() * m.needs.length)], have: 0, done: false };
     if (m.type === 'bloomColor') { const cols = lotusColors(); it.color = cols[Math.floor(r() * cols.length)]; }
+    if (m.type === 'sway') it.what = seasonKey === 'spring' ? '花びら' : 'もみじ';
     items.push(it);
   }
   return { day, items, reward: false };
@@ -1276,13 +1299,20 @@ function missionText(it) {
     case 'full': return `満開を${it.need}回`;
     case 'feed': return `鯉に餌を${it.need}粒あげる`;
     case 'glide': return `水面をなぞって、音を${it.need}回鳴らす`;
-    case 'breath': return '呼吸を1分以上する';
+    case 'breath': return it.need === 1 ? '呼吸を1分以上する' : `呼吸をあわせて${it.need}分する`;
+    case 'name': return '鯉に名前を付ける';
+    case 'grow': return '鯉を1匹育てる（大きさの段階を上げる）';
+    case 'multi': return it.need === 1 ? 'ひとつの波紋で、つぼみ3つに届かせる' : `ひとつの波紋で、つぼみ3つに届かせる（${it.need}回）`;
+    case 'sway': return `波紋で${it.what || 'もみじ'}を${it.need}枚ゆらす`;
     case 'photo': return '池の写真を1枚撮る';
     case 'stay': return `池で${it.need / 60}分すごす`;
   }
   return '';
 }
-const missionProgress = it => it.type === 'stay' ? `${Math.floor(it.have / 60)} / ${it.need / 60} 分` : `${Math.floor(it.have)} / ${it.need}`;
+const prevDay = key => { const [y, m, dd] = key.split('-').map(Number); const t = new Date(y, m - 1, dd); t.setDate(t.getDate() - 1); return dayKey(t); };
+// いま続いているお題の連続日数（今日か昨日まで続いていれば、その日数。途切れていれば0）
+const streakNow = () => { const s = S.mstreak, today = dayKey(); return s.last === today || s.last === prevDay(today) ? s.count : 0; };
+const missionProgress = it => it.type === 'stay' ? `${Math.floor(it.have / 60)} / ${it.need / 60} 分` : it.type === 'breath' && it.need > 1 ? `${Math.floor(it.have)} / ${it.need} 分` : `${Math.floor(it.have)} / ${it.need}`;
 // お題を進める。達成したら知らせ、3つそろったら、ごほうび（次の満開でめずらしい鯉）
 function mission(type, n = 1, color) {
   if (!started) return;
@@ -1302,6 +1332,15 @@ function mission(type, n = 1, color) {
   if (!S.daily.reward && S.daily.items.every(i => i.done)) {
     S.daily.reward = true; S.rareBoost = true;
     toast('今日のお題をすべて達成', '次の満開で、めずらしい鯉がやってきます');
+    // 何日続けて3つ達成したか。前の日も達成していれば1日増やし、空いたら1日目から
+    const ms = S.mstreak, day = S.daily.day, wasOpen = moonOpen();
+    if (ms.last !== day) { ms.count = ms.last === prevDay(day) ? ms.count + 1 : 1; ms.last = day; }
+    ms.best = Math.max(ms.best, ms.count);
+    if (ms.count >= 2) toast(`お題 ${ms.count}日連続`, ms.count < 7 ? `景色「満月」まで、あと${7 - ms.count}日` : '');
+    if (!wasOpen && moonOpen()) {
+      S.set.scene = 'moon'; sceneCheck = 0;
+      toast('景色「満月」が選べるようになりました', '設定の景色から選べます。満月のころの夜は、おまかせでも満月に');
+    }
   }
   renderGoal(true); saveSoon();
 }
@@ -1340,7 +1379,7 @@ let started = false;
 const touches = new Map();
 function tapAt(x, y) {
   audioStart();
-  addRipple(x, y, { power: 1 });
+  addRipple(x, y, { power: 1, player: true });
   if (pellets.length >= 8) pellets.shift().alive = false;
   pellets.push({ x, y, vx: 0, vy: 0, t: 0, alive: true });
   bell(noteAtX(x), { vel: .2 - (x / W) * .06, pan: x / W * 1.6 - .8 });
@@ -1361,7 +1400,7 @@ cv.addEventListener('pointermove', e => {
   const d = Math.hypot(e.clientX - t.x, e.clientY - t.y);
   if (d > Math.max(26, U * .07)) {
     t.x = e.clientX; t.y = e.clientY;
-    addRipple(t.x, t.y, { power: .34, R: U * .2, life: 2.4, a: .8 });
+    addRipple(t.x, t.y, { power: .34, R: U * .2, life: 2.4, a: .8, player: true });
     const now = performance.now();
     if (now - t.lt > 85) { t.lt = now; bell(noteAtX(t.x), { vel: .085, dur: 1.8, pan: t.x / W * 1.6 - .8 }); mission('glide'); }
   }
@@ -1382,7 +1421,7 @@ function update(dt) {
   sceneCheck -= dt;
   if (sceneCheck <= 0) {
     sceneCheck = 20;
-    const sk = S.set.scene === 'auto' ? todNow() : S.set.scene;
+    const sk = S.set.scene === 'auto' ? autoScene() : S.set.scene;
     if (sk !== sceneKey) { sceneKey = sk; PT = palOf(sk); }
     const se = S.set.season === 'auto' ? sekkiNow().season : S.set.season;
     if (se !== seasonKey) { seasonKey = se; rebuildSeason(); }
@@ -1406,10 +1445,11 @@ function update(dt) {
       const fall = push(p, .1);
       if (fall !== false && r.power > 0 && !p.bloomed && !p.leaving && p.alpha > .5) {
         p.energy += r.power * (.55 + .45 * fall); p.pulse = Math.max(p.pulse, .6 * r.power + .2); p.vr += rand(-.4, .4);
+        if (r.player && ++r.padHits === 3) mission('multi');
         if (p.energy >= BLOOM_NEED) bloomPad(p);
       }
     }
-    for (const f of floaters) push(f, .16);
+    for (const f of floaters) { if (push(f, .16) !== false && r.player) mission('sway'); }
     for (const p of pellets) push(p, .06);
     for (const l of lanterns) push(l, .1);
   }
@@ -1500,6 +1540,16 @@ function draw() {
     const w = U * (.02 + .1 * k) * (.35 + .65 * Math.abs(Math.sin(T * .55 + i * 1.7)));
     const x = gx + Math.sin(T * .5 + i * 2.1) * U * .02;
     c.fillStyle = rgba(P.glow, .22 * P.ga * k); c.beginPath(); c.ellipse(x, y, w / 2, 1.1, 0, 0, TAU); c.fill();
+  }
+  // 満月の景色: 星の映り込みと、水面の満月
+  if (P.moon > .01) {
+    for (const st of STARS) { const tw = .55 + .45 * Math.sin(T * st.sp + st.ph); c.fillStyle = rgba([232, 238, 255], st.a * tw * P.moon); c.fillRect(st.x * W, st.y * H + Math.sin(T * .6 + st.ph) * 1.2, st.s, st.s * .7); }
+    const mx = W * P.gx, my = H * P.gy, mr = clamp(U * .075, 22, 60);
+    drawGlow(P.glow, mx, my, mr * 4.5, .32 * P.moon);
+    c.save(); c.translate(mx + Math.sin(T * .5) * 1.5, my); c.scale(1 + Math.sin(T * .7) * .025, 1.1 + Math.sin(T * .9) * .035);
+    const mg = c.createRadialGradient(0, 0, 0, 0, 0, mr);
+    mg.addColorStop(0, rgba([255, 253, 244], .95 * P.moon)); mg.addColorStop(.8, rgba([250, 244, 222], .88 * P.moon)); mg.addColorStop(1, rgba([250, 244, 222], 0));
+    c.fillStyle = mg; c.beginPath(); c.arc(0, 0, mr, 0, TAU); c.fill(); c.restore();
   }
   // 鯉
   for (const k of koi) k.draw(c);
@@ -1608,7 +1658,7 @@ function breathFinish(done) {
   $('breath').classList.remove('show');
   releaseWake();
   if (sec >= 20) { S.breaths++; S.breathSec += sec; save(); }
-  if (sec >= 60) mission('breath');
+  if (sec >= 60) mission('breath', Math.floor(sec / 60));
   if (done) { toast('おつかれさまでした', `${Math.round(sec / 60)}分、呼吸をととのえました`); bell(scene().key + 24, { vel: .12, dur: 5 }); bell(scene().key + 31, { vel: .08, dur: 5, when: .3 }); buzz('success'); }
 }
 $('bEnd').addEventListener('click', () => breathFinish(false));
@@ -1769,6 +1819,10 @@ function goalsHTML() {
   return `<p class="lead">${dt.getMonth() + 1}月${dt.getDate()}日のお題。毎日かわります</p>
   <ul class="ms">${items}</ul>
   <p class="reward">${reward}</p>
+  <h3 class="sec">お題の連続<small>いちばん長く ${S.mstreak.best}日</small></h3>
+  <p class="streak"><b>${streakNow()}</b>日 続けて3つ達成</p>
+  <div class="bar"><i style="width:${Math.round(Math.min(streakNow(), 7) / 7 * 100)}%"></i></div>
+  <p class="note">${moonOpen() ? '景色「満月」が選べます（設定 → 景色）。満月のころの夜は、おまかせでも満月の池になります' : `7日続けて3つ達成すると、特別な景色「満月」が選べるようになります（あと${7 - Math.min(7, streakNow())}日）`}</p>
   <h3 class="sec">図鑑<small>${seenN} / ${KINDS.length} 種類</small></h3>
   <div class="bar"><i style="width:${Math.round(seenN / KINDS.length * 100)}%"></i></div>
   <p class="note">${seenN === KINDS.length ? 'すべての鯉と出会いました' : `まだ見ぬ鯉: よく見る ${left(1)}・ときどき ${left(2)}・めずらしい ${left(3)}`}</p>
@@ -1832,7 +1886,7 @@ function recordHTML() {
   </div>
   <h3 class="sec">この一週間<small>池にいた時間（分）</small></h3>
   <div class="week">${week.map((w, i) => `<div class="wk ${w.today ? 'today' : ''}"><b>${w.m || ''}</b><i style="height:${Math.max(2, w.m / max * 72)}%;animation-delay:${i * 50}ms"></i><span>${w.wd}</span></div>`).join('')}</div>
-  <p class="mini">咲かせた蓮 ${S.blooms}輪・呼吸 ${S.breaths}回・池の鯉 ${S.koi.length}匹<br>1日1分以上いると「続けて」の日数が増えます</p>
+  <p class="mini">咲かせた蓮 ${S.blooms}輪・呼吸 ${S.breaths}回・池の鯉 ${S.koi.length}匹<br>今日のお題の連続 ${streakNow()}日（いちばん長く ${S.mstreak.best}日）<br>1日1分以上いると「続けて」の日数が増えます</p>
   <h3 class="sec">池のしつらえ<small>${next ? `次は満開あと${next.at - S.fulls}回` : 'すべてそろいました'}</small></h3>
   <ul class="unlocks">${UNLOCKS.map(u => { const got = S.fulls >= u.at; return `<li class="${got ? 'got' : ''}">${got ? ICON.lotus : ICON.lock}<div class="u"><b>${u.name}</b><span>${got ? u.desc : `満開${u.at}回で`}</span></div></li>`; }).join('')}</ul>`;
 }
@@ -1868,8 +1922,8 @@ function settingsHTML() {
   <div class="row"><label for="vol">音量</label><input type="range" id="vol" min="0" max="1" step="0.05" value="${S.set.vol}"></div>
   ${IS_IOS ? sw('ignoreMute', S.set.ignoreMute, 'マナーモードでも鳴らす', 'iPhoneの消音スイッチが入っていても音を出します') : ''}
   ${sw('vib', S.set.vib, '振動', '対応している端末のみ')}
-  <h3 class="sec">景色</h3>${seg('scene', S.set.scene, [['auto', 'おまかせ'], ['night', '夜'], ['dawn', '朝'], ['day', '昼'], ['dusk', '夕']])}
-  <p class="note">おまかせは、いまの時刻に合わせて変わります</p>
+  <h3 class="sec">景色</h3>${seg('scene', S.set.scene, [['auto', 'おまかせ'], ['night', '夜'], ['dawn', '朝'], ['day', '昼'], ['dusk', '夕']].concat(moonOpen() ? [['moon', '満月']] : []))}
+  <p class="note">${moonOpen() ? 'おまかせは、いまの時刻に合わせて変わります。満月のころの夜は満月の池になります' : 'おまかせは、いまの時刻に合わせて変わります。今日のお題を7日続けて達成すると「満月」が選べます'}</p>
   <h3 class="sec">季節</h3>${seg('season', S.set.season, [['auto', 'おまかせ'], ['spring', '春'], ['summer', '夏'], ['autumn', '秋'], ['winter', '冬']])}
   <p class="note">おまかせは二十四節気に合わせます。いまは${sk.name}（${SEASON_NAME[sk.season]}）。春は桜の花びら、夏は蛍、秋は紅葉と虫の声、冬は雪</p>
   <h3 class="sec">池のしつらえ</h3>
@@ -1951,18 +2005,22 @@ $('sheetBody').addEventListener('click', e => {
     resetArmed = false; resetAll();
   }
 });
+// 鯉に名前を付ける（空にすると名前を外す）
+function renameKoi(id, raw) {
+  const d = S.koi.find(k => k.id === id);
+  if (!d) return;
+  const name = cleanName(raw);
+  if (name) { const fresh = name !== d.name; d.name = name; toast(`「${name}」と名付けました`, KIND[d.kind].name); buzz('light'); if (fresh) mission('name'); }
+  else if (d.name) { delete d.name; toast('名前を外しました', KIND[d.kind].name); }
+  save();
+}
 $('sheetBody').addEventListener('submit', e => {
   const f = e.target.closest('[data-rename-form]');
   if (!f) return;
   e.preventDefault();
-  const d = S.koi.find(k => k.id === +f.dataset.renameForm), inp = f.querySelector('input');
+  const inp = f.querySelector('input');
   renaming = 0;
-  if (d && inp) {
-    const name = cleanName(inp.value);
-    if (name) { d.name = name; toast(`「${name}」と名付けました`, KIND[d.kind].name); buzz('light'); }
-    else if (d.name) { delete d.name; toast('名前を外しました', KIND[d.kind].name); }
-    save();
-  }
+  if (inp) renameKoi(+f.dataset.renameForm, inp.value);
   renderSheet();
 });
 $('sheetBody').addEventListener('input', e => {
@@ -2187,7 +2245,7 @@ window.__nagi = {
   get round() { return round; }, get breath() { return breath; }, get sleeping() { return sleeping; }, get T() { return T; }, get gen() { return gen; },
   get drawCount() { return drawCount; }, get unmuteEl() { return unmuteEl; }, IS_IOS, applySilentMode,
   idleFor(ms) { lastInput = performance.now() - ms; }, // 計測用: ms ミリ秒触っていないことにする
-  mission, makeDaily, ensureDaily, goalsHTML, missionText, rollKind,
+  mission, makeDaily, ensureDaily, goalsHTML, missionText, rollKind, renameKoi, streakNow, moonAge, isFullMoon, autoScene, get sceneKey() { return sceneKey; },
   step(dt) { update(dt); draw(); }, resize, sanitize, exportCode, parseCode, applyState, resetAll, streak, recordHTML, settingsHTML, zukanHTML, sekkiNow, scheduleNotify, setSleep, wakeUp, initNativeStore,
 };
 })();

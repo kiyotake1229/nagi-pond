@@ -69,7 +69,7 @@ const SCENES = {
     state: { rareBoost: true, seen: { kohaku: true, ogon: true, showa: true, tancho: true, asagi: true, sanke: true, chagoi: true, platinum: true, shiro: true } },
     run: async N => { await bloom(N, 5); for (let i = 0; i < 60 && !N.round.celebrated; i++) await sleep(100); await sleep(5200); } },
   goals: { h: '毎日かわる、今日のお題', p: '3つ達成すると、めずらしい鯉がやってくる',
-    state: { daily: { day: 'TODAY', items: [{ type: 'bloom', need: 8, have: 8 }, { type: 'feed', need: 15, have: 15 }, { type: 'photo', need: 1, have: 0 }] } },
+    state: { daily: { day: 'TODAY', items: [{ type: 'bloom', need: 8, have: 8 }, { type: 'feed', need: 15, have: 15 }, { type: 'photo', need: 1, have: 0 }] }, mstreak: { count: 4, last: 'YESTERDAY', best: 4 } },
     run: async N => { await bloom(N, 2); await sleep(1500); N.openSheet('goals'); await sleep(1300); } },
   bloom: { h: '五輪咲けば、満開', p: '新しい鯉が池にやってくる',
     // 満開の文字がはっきり見え、新しい鯉の知らせが出たところで撮る
@@ -78,6 +78,9 @@ const SCENES = {
     run: async N => { await bloom(N, 3); await sleep(1500); N.openSheet('zukan'); await sleep(1300); } },
   breath: { h: '輪に合わせて、ゆっくり呼吸', p: 'ととのう・ねむる・しずめる',
     run: async N => { await bloom(N, 2); await sleep(1500); N.breathStart(); await sleep(3600); } },
+  moon: { h: '7日続けると、満月の池', p: '今日のお題を続けて達成したごほうび', set: { scene: 'moon', season: 'autumn' },
+    state: { mstreak: { count: 7, last: 'TODAY', best: 7 } },
+    run: async N => { await bloom(N, 3, true); await sleep(3400); } },
   season: { h: '時刻と季節で、池が変わる', p: '朝霧・夕暮れ　桜・蛍・紅葉・雪', set: { scene: 'dusk', season: 'winter' },
     run: async N => { await bloom(N, 3, true); await sleep(3400); } },
 };
@@ -105,7 +108,9 @@ window.setupScene = async name => {
   layout();
   localStorage.clear();
   const st0 = seedState(sc.set || {}, sc.state || {});
-  if (st0.daily && st0.daily.day === 'TODAY') { const t = new Date(); st0.daily.day = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`; }
+  const key = n => { const t = new Date(); t.setDate(t.getDate() - n); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`; };
+  if (st0.daily && st0.daily.day === 'TODAY') st0.daily.day = key(0);
+  if (st0.mstreak) st0.mstreak.last = { TODAY: key(0), YESTERDAY: key(1) }[st0.mstreak.last] || st0.mstreak.last;
   localStorage.setItem('nagi.v1', JSON.stringify(st0));
   const f = document.getElementById('app');
   await new Promise(r => { f.onload = r; f.src = '../index.html?shot=' + Date.now(); });
