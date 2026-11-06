@@ -1,26 +1,181 @@
-# iOSビルド確認（署名なし）。手元にXcodeが無いため、GitHubのmacOSランナーで
-# pod install → xcodebuild が通ることを検証する。App Store申請には使わない。
+# iOS のビルド確認（署名なし）。手元に Xcode が無いため、GitHub の macOS ランナーで
+# npm ci → www/ へコピー → cap sync（pod install）→ xcodebuild が通ることを確かめる。
+# あわせて、App Store のアップロードで見られる申告（プライバシーマニフェスト・暗号化）がアプリに入っていることを確かめる。
+# App Store への申請には使わない（申請は Xcode の Archive で行う。ios-app/岩崎さんへの引き渡し手順.md）。
+#
+# Xcode は 26 で確かめる。このプロジェクトは Capacitor 7 のままで UIScene に対応していないため、
+# Xcode 27（iOS 27 の SDK）でビルドすると起動しないおそれがある。ランナーは macos-26 に固定し、既定が 26 でなければ 26 を選び直す。
+#
+# 失敗を見逃さないための決まり（そなえ帳・思考力の ios-build.yml と同じ）:
+#   - xcodebuild の出力を tee / tail に流すので、set -o pipefail で xcodebuild の失敗をそのまま失敗にする
+#   - さらにログに「** BUILD SUCCEEDED **」が無ければ失敗にする
 name: iOS build check
+
 on:
   push:
-    paths: ["index.html", "ios-app/**", ".github/workflows/ios-build.yml"]
+    # アプリに入るファイル（ios-app/sync-web.sh が www/ にコピーするもの）と iOS プロジェクトが変わったとき
+    paths:
+      - "index.html"
+      - "manifest.json"
+      - "icon.svg"
+      - "icon-192.png"
+      - "icon-512.png"
+      - "apple-touch-icon.png"
+      - "ios-app/**"
+      - "!ios-app/**/*.md"
+      - "!ios-app/screenshots/**"
+      - ".github/workflows/ios-build.yml"
   workflow_dispatch:
+
+concurrency:
+  group: ios-build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
-    runs-on: macos-latest
-    defaults: { run: { working-directory: ios-app } }
+    runs-on: macos-26
+    timeout-minutes: 40
+    env:
+      LANG: en_US.UTF-8
+      LC_ALL: en_US.UTF-8
+    defaults:
+      run:
+        shell: bash
+        working-directory: ios-app
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
-        with: { node-version: 22 }
-      - run: npm ci
-      - run: npm run sync-web
-      - run: npx cap sync ios
-      - name: Build (simulator, no signing)
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ios-app/package-lock.json
+
+      - name: Select Xcode 26
+        run: |
+          set -euo pipefail
+          V=$(xcodebuild -version 2>/dev/null | sed -n 1p)
+          case "$V" in
+            "Xcode 26."*) echo "既定の $V を使う" ;;
+            *)
+              X=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | tail -n 1 || true)
+              [ -n "$X" ] || { echo "::error::ランナーに Xcode 26 がありません（既定は $V）"; exit 1; }
+              sudo xcode-select -s "$X/Contents/Developer"
+              echo "既定の $V から $X に切り替えた" ;;
+          esac
+
+      - name: Versions
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          pod --version
+          node --version
+
+      - name: Install packages
+        run: npm ci
+
+      - name: Copy web assets to www/
+        run: npm run sync-web
+
+      - name: Capacitor sync (pod install)
+        run: npx cap sync ios
+
+      - name: Check project
+        run: |
+          set -euo pipefail
+          test -s ios/App/App/public/index.html || { echo "::error::ios/App/App/public/index.html がありません（sync-web / cap sync を確認）"; exit 1; }
+          grep -q "PRODUCT_BUNDLE_IDENTIFIER = work.ltv.nagi;" ios/App/App.xcodeproj/project.pbxproj || { echo "::error::Bundle ID が work.ltv.nagi ではありません"; exit 1; }
+          plutil -lint ios/App/App/Info.plist
+          plutil -lint ios/App/App/PrivacyInfo.xcprivacy
+          grep -q "PrivacyInfo.xcprivacy in Resources" ios/App/App.xcodeproj/project.pbxproj || { echo "::error::PrivacyInfo.xcprivacy がアプリ（App ターゲットの Resources）に入っていません"; exit 1; }
+          test -d ios/App/Pods || { echo "::error::pod install が行われていません"; exit 1; }
+
+      - name: Build for iOS Simulator (Debug, no signing)
         run: |
           set -o pipefail
           xcodebuild build \
             -workspace ios/App/App.xcworkspace -scheme App \
             -destination 'generic/platform=iOS Simulator' \
             -configuration Debug CODE_SIGNING_ALLOWED=NO \
-            | tail -30
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            2>&1 | tee build-simulator.log | tail -40
+          grep -q '\*\* BUILD SUCCEEDED \*\*' build-simulator.log || { echo "::error::Simulator ビルドのログに BUILD SUCCEEDED がありません"; exit 1; }
+
+      - name: Build for iOS device (Release, no signing)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -workspace ios/App/App.xcworkspace -scheme App \
+            -destination 'generic/platform=iOS' \
+            -configuration Release CODE_SIGNING_ALLOWED=NO \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            2>&1 | tee build-device.log | tail -40
+          grep -q '\*\* BUILD SUCCEEDED \*\*' build-device.log || { echo "::error::実機向けビルドのログに BUILD SUCCEEDED がありません"; exit 1; }
+
+      - name: Check app bundle
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/dd/Build/Products/Release-iphoneos/App.app"
+          test -d "$APP" || { echo "::error::App.app ができていません"; exit 1; }
+          test -s "$APP/public/index.html" || { echo "::error::アプリに index.html が入っていません"; exit 1; }
+          PB=/usr/libexec/PlistBuddy
+          ID=$($PB -c "Print :CFBundleIdentifier" "$APP/Info.plist")
+          [ "$ID" = "work.ltv.nagi" ] || { echo "::error::Bundle ID が違います: $ID"; exit 1; }
+          [ "$($PB -c "Print :ITSAppUsesNonExemptEncryption" "$APP/Info.plist")" = "false" ] || { echo "::error::ITSAppUsesNonExemptEncryption が false ではありません"; exit 1; }
+          $PB -c "Print :NSPhotoLibraryAddUsageDescription" "$APP/Info.plist" >/dev/null || { echo "::error::NSPhotoLibraryAddUsageDescription がありません（共有シートの画像の保存で落ちる）"; exit 1; }
+          echo "表示名: $($PB -c "Print :CFBundleDisplayName" "$APP/Info.plist")"
+          echo "同梱した Web 資産:"; ls -1 "$APP/public"
+          echo "フレームワーク:"; ls -1 "$APP/Frameworks"
+          for fw in Capacitor CapacitorFilesystem CapacitorHaptics CapacitorLocalNotifications CapacitorPreferences CapacitorShare CapacitorStatusBar; do
+            test -d "$APP/Frameworks/$fw.framework" || { echo "::error::$fw.framework がありません"; exit 1; }
+          done
+
+      - name: Check privacy manifest
+        run: |
+          set -euo pipefail
+          # アプリの中に PrivacyInfo.xcprivacy があり、トラッキングなし・収集データなし、
+          # 使っている部品に合わせた「理由の申告が要る API」が書いてあること（足りないとアップロードで ITMS-91053 になる）
+          APP="$RUNNER_TEMP/dd/Build/Products/Release-iphoneos/App.app"
+          test -f "$APP/PrivacyInfo.xcprivacy" || { echo "::error::App.app に PrivacyInfo.xcprivacy が入っていません"; exit 1; }
+          plutil -lint "$APP/PrivacyInfo.xcprivacy"
+          python3 - "$APP" <<'CHECK'
+          import os, plistlib, sys
+          app = sys.argv[1]
+          d = plistlib.load(open(os.path.join(app, "PrivacyInfo.xcprivacy"), "rb"))
+          err = []
+          if d.get("NSPrivacyTracking") is not False: err.append("NSPrivacyTracking が false ではありません")
+          if d.get("NSPrivacyTrackingDomains"): err.append("NSPrivacyTrackingDomains が空ではありません")
+          if d.get("NSPrivacyCollectedDataTypes"): err.append("NSPrivacyCollectedDataTypes が空ではありません（App Store の「データを収集しません」と食い違う）")
+          api = {a.get("NSPrivacyAccessedAPIType"): a.get("NSPrivacyAccessedAPITypeReasons", []) for a in d.get("NSPrivacyAccessedAPITypes", [])}
+          for cat, reasons in api.items():
+              print(f"申告: {cat} {', '.join(reasons)}")
+          need = [("全アプリ共通", "NSPrivacyAccessedAPICategoryUserDefaults", "CA92.1")]
+          rules = {"CapacitorPreferences": ("NSPrivacyAccessedAPICategoryUserDefaults", "CA92.1"),
+                   "CapacitorFilesystem": ("NSPrivacyAccessedAPICategoryFileTimestamp", "C617.1")}
+          for fw, (cat, reason) in rules.items():
+              if os.path.isdir(os.path.join(app, "Frameworks", fw + ".framework")):
+                  need.append((fw, cat, reason))
+          for who, cat, reason in need:
+              if reason not in api.get(cat, []):
+                  err.append(f"{who} のために {cat}（{reason}）の申告が要ります")
+          for e in err: print("::error::" + e)
+          sys.exit(1 if err else 0)
+          CHECK
+
+      - name: Show errors
+        if: failure()
+        run: |
+          for f in build-*.log; do
+            [ -f "$f" ] || continue
+            echo "=== $f ==="
+            grep -nE "error:|\*\* BUILD FAILED \*\*" "$f" | head -60 || true
+          done
+
+      - name: Upload build logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-logs
+          path: ios-app/build-*.log
+          if-no-files-found: ignore
+          retention-days: 7

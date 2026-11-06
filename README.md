@@ -14,7 +14,7 @@
 | 通信 | なし（完全オフライン。外部フォントも使わない） |
 | データ | 端末内のみ（localStorage のキー `nagi.v1`。iOS 版はアプリ用の保存領域にも二重に保存） |
 | PWA | 対応（`manifest.json` / `sw.js` / アイコン一式） |
-| iOS | Capacitor 7 → [`ios-app/`](ios-app/)。Bundle ID `work.ltv.nagi` |
+| iOS | Capacitor 7 → [`ios-app/`](ios-app/)。Bundle ID `work.ltv.nagi`。プライバシーマニフェストと暗号化の申告あり。GitHub Actions（Xcode 26）でビルド確認（docs #0033） |
 
 ---
 
@@ -65,6 +65,7 @@ App Store への申請手順は **[ios-app/岩崎さんへの引き渡し手順.
 - v1.4.0: #0025 目標の札とタイトルの一言 / #0026 今日のお題 / #0027 めずらしい鯉の演出 / #0028 更新がすぐ届くように
 - v1.5.0: #0029 お題の連続記録と景色「満月」 / #0030 お題の種類を増やす
 - v1.6.0: #0031 連続のごほうびの景色（雨の池・雪見灯籠） / #0032 夜のお知らせにお題の残り
+- iOS 申請の準備: #0033 プライバシーマニフェストとビルド確認の強化（Xcode 26 に固定）
 - 機能追加・バグ修正・改善をしたら、1件ごとに文書を足して `bash docs/manager/generate_docs_json.sh` を実行する
 
 ## ファイル構成
