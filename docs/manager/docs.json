@@ -1,8 +1,18 @@
 {
-  "next_no": 34,
-  "total": 33,
-  "generated_at": "2026-11-06T13:51:30.321563",
+  "next_no": 35,
+  "total": 34,
+  "generated_at": "2026-11-06T15:08:11.244200",
   "documents": [
+    {
+      "no": 34,
+      "date": "2026-11-06",
+      "type": "DOC",
+      "category": "IOS",
+      "title": "引き渡し手順の必要な環境をXcode26に",
+      "filename": "20261106_DOC_0034_IOS_引き渡し手順の必要な環境をXcode26に.md",
+      "extension": "md",
+      "summary": "岩崎さんへの引き渡し手順の「必要な環境」が古いままだった。このアプリは Capacitor 7 のため、Xcode 27 でビルドすると起動しないおそれがある。Xcode 26 を使うこと、macOS ごとに使う Xcode の版、入手先、Node.js 20 以降を書いた。"
+    },
     {
       "no": 33,
       "date": "2026-11-06",
